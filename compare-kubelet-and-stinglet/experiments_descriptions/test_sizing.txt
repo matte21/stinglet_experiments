@@ -1,0 +1,9 @@
+[experiment_1]
+kubelet_bin=cxl-full-topo-awareness
+config=unified-far-mem
+pods_trace_1=bwaves-s
+
+[experiment_2]
+kubelet_bin=v1.33.0++
+config=beff+l1spread
+pods_trace_1=bwaves-s

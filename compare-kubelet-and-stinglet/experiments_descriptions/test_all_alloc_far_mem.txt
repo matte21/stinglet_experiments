@@ -1,0 +1,11 @@
+[experiment_1]
+kubelet_bin=v1.33.0++
+config=beff+l1spread
+pods_trace_1=xsbench-1,xsbench-2,btree
+pods_trace_2=xsbench-1,xsbench-2,pagerank
+
+[experiment_2]
+kubelet_bin=cxl-full-topo-awareness
+config=unified-far-mem
+pods_trace_1=xsbench-1-fm,xsbench-2-fm,btree
+pods_trace_2=xsbench-1-fm,xsbench-2-fm,pagerank

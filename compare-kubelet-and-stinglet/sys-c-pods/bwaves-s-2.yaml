@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: bwaves-s-2
+  annotations:
+    bwaves-s-2/cpus-distribution-over-caches: "l1-spread"
+spec:
+  containers:
+    - name: bwaves-s-2
+      image: localhost/mattedocker/bwaves-s:v0
+      command: ["/bin/sh", "-c"]
+      args: ["./speed_bwaves_base.mytest-m64 < bwaves_1.in"]
+      resources:
+        requests:
+          cpu: "8"
+          memory: "11469Mi"
+        limits:
+          cpu: "8"
+          memory: "11469Mi"
+  restartPolicy: Never

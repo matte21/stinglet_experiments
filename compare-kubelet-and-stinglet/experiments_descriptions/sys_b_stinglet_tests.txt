@@ -1,0 +1,11 @@
+[experiment_1]
+kubelet_bin=cxl-full-topo-awareness
+config=unified-far-mem
+pods_trace_2=bwaves-s-1,btree-1,bwaves-s-2,btree-2,btree-3,pagerank,roms-s,graph500-l,graph500-xl,liblinear,silo-fm,xsbench-1-fm,xsbench-2-fm
+pods_trace_5=xsbench-1-fm,xsbench-2-fm,btree-1,graph500-l,bwaves-s-1,bwaves-s-2,btree-2,silo-fm,liblinear,graph500-xl,btree-3,roms-s,pagerank
+pods_trace_6=xsbench-1-fm,btree-1,bwaves-s-1,silo-fm,xsbench-2-fm,btree-2,bwaves-s-2,liblinear,btree-3,graph500-xl,graph500-l,roms-s,pagerank
+pods_trace_7=graph500-xl,xsbench-1-fm,silo-fm,btree-1,liblinear,graph500-l,roms-s,pagerank,btree-2,bwaves-s-1,bwaves-s-2,btree-3,xsbench-2-fm
+pods_trace_8=graph500-l,btree-1,xsbench-1-fm,roms-s,btree-2,bwaves-s-1,liblinear,xsbench-2-fm,silo-fm,pagerank,bwaves-s-1,graph500-xl,btree-3
+pods_trace_9=pagerank,bwaves-s-1,xsbench-1-fm,btree-1,graph500-xl,silo-fm,btree-2,roms-s,xsbench-2-fm,liblinear,bwaves-s-2,btree-3,graph500
+pods_trace_10=roms-s,graph500-l,pagerank,graph500-xl,btree-1,liblinear,btree-2,silo-fm,btree-3,xsbench-1-fm,bwaves-s-1,xsbench-2-fm,bwaves-s-2
+pods_trace_10=roms-s,graph500-l,pagerank,btree-1,liblinear,btree-2,silo-fm,btree-3,xsbench-1-fm,bwaves-s-1,xsbench-2-fm,bwaves-s-2,graph500-xl

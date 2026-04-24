@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: silo-3-fm
+  annotations:
+    silo-3-fm/cpus-distribution-over-caches: "l1-spread"
+    silo-3-fm/far-mem: "4Gi"
+spec:
+  containers:
+    - name: silo-3-fm
+      image: localhost/mattedocker/mol-silo:v0
+      command: ["/dbtest"]
+      args: ["--verbose", "--bench", "ycsb", "--scale-factor", "200000", "--num-threads", "8", "--ops-per-worker", "400000000"]
+      resources:
+        requests:
+          cpu: "8"
+          memory: "25Gi"
+        limits:
+          cpu: "8"
+          memory: "25Gi"
+  restartPolicy: Never

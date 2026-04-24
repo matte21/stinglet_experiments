@@ -1,0 +1,7 @@
+[experiment_4]
+kubelet_bin=cxl-full-topo-awareness
+config=unified-far-mem
+pods_trace_1=xsbench-1-fm,xsbench-2-fm,xsbench-3-fm,liblinear-1,liblinear-2,btree,liblinear-3,liblinear-4,pagerank
+pods_trace_2=liblinear-1,liblinear-2,btree,liblinear-3,liblinear-4,pagerank,xsbench-1-fm,xsbench-2-fm,xsbench-3-fm
+pods_trace_3=xsbench-1-fm,liblinear-1,liblinear-2,btree,xsbench-2-fm,liblinear-3,liblinear-4,pagerank,xsbench-3-fm
+pods_trace_4=btree,xsbench-1-fm,liblinear-2,liblinear-1,xsbench-2-fm,pagerank,xsbench-3-fm,liblinear-3,liblinear-4

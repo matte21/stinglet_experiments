@@ -1,0 +1,3 @@
+topologyManagerPolicy: "best-effort"
+cpuManagerPolicy: "static"
+memoryManagerPolicy: "Static"

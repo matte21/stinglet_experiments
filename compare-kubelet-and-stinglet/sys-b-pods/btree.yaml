@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: btree
+  annotations:
+    btree/cpus-distribution-over-caches: "l1-spread"
+spec:
+  containers:
+    - name: btree
+      image: localhost/mattedocker/btree:v0
+      command: ["./bench_btree_mt"]
+      resources:
+        requests:
+          cpu: "8"
+          memory: "15668Mi"
+        limits:
+          cpu: "8"
+          memory: "15668Mi"
+  restartPolicy: Never

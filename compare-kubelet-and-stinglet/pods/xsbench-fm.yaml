@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: xsbench
+  labels:
+    xsbench/far-mem: "6Gi"
+spec:
+  containers:
+    - name: xsbench
+      image: localhost/mattedocker/mol-xsbench:v206
+      command: ["./xsbench"]
+      args: ["-t", "20", "-g", "130000", "-p", "30000000"]
+      resources:
+        requests:
+          cpu: "20"
+          memory: "59904Mi"
+        limits:
+          cpu: "20"
+          memory: "59904Mi"
+  restartPolicy: Never

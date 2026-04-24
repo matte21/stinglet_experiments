@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: graph500-1
+  annotations:
+    graph500-1/cpus-distribution-over-caches: "l1-spread"
+spec:
+  containers:
+    - name: graph500-1
+      image: localhost/mattedocker/mol-graph500:v0
+      command: ["/omp-csr"]
+      args: ["-s", "27", "-e", "15", "-V"]
+      resources:
+        requests:
+          cpu: "8"
+          memory: "67994Mi"
+        limits:
+          cpu: "8"
+          memory: "67994Mi"
+  restartPolicy: Never

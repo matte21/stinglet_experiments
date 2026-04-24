@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: tp-2
+spec:
+  restartPolicy: "Never"
+  containers:
+  - name: my-container
+    image: alpine/git:2.49.1 # Using an image that has bash shell and can sleep
+    command: ["/bin/sh"]
+    args: ["-c", "echo 'This is a stdout message 2'; sleep 5; echo 'This is an stderr message 2' >&2"]

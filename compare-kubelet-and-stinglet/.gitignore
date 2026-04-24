@@ -1,0 +1,11 @@
+kubelet-bins/
+collected-data/
+pods-volumes-files/
+pods/liblinear.yaml
+pods/pagerank-4-cpus.yaml
+pods/pagerank-8-cpus.yaml
+pods/pagerank-12-cpus.yaml
+pods/pagerank-4-cpus-fm.yaml
+pods/pagerank-8-cpus-fm.yaml
+pods/pagerank-12-cpus-fm.yaml
+kubelet-log-collector-pid

@@ -1,0 +1,33 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: xsbench-2-fm
+  annotations:
+    xsbench-2-fm/far-mem: "5Gi"
+    xsbench-2-fm/cpus-distribution-over-caches: "l1-spread"
+spec:
+  containers:
+    - name: xsbench-2-fm
+      image: localhost/mattedocker/mol-xsbench:v206
+      # We pass the arguments as follows, and append "exit 0" to the command, because a bug in xsbench
+      # causes it to return a non-0 exit code even on success, see this issue: https://github.com/ANL-CESAR/XSBench/issues/37 and this PR: https://github.com/ANL-CESAR/XSBench/pull/19 .
+      # But with a non-0 exit code Kubernetes marks the pod as failed, which we don't want. So we mask the spurious failure by appending "exit 0".
+      # It sucks but it's the quickest workaround I could find. One exception however is that we
+      # want to catch OOM kills, because those are fair terminations in our experiment, and we want
+      # to measure how often they occur. OOM kills result in 137 exit code.
+      command: ["/bin/bash", "-c"]
+      args:
+      - |
+        ./xsbench -t 8 -g 130000 -p 30000000
+        if [ $? -eq 137 ]; then
+          exit 137
+        fi
+        exit 0
+      resources:
+        requests:
+          cpu: "8"
+          memory: "59Gi"
+        limits:
+          cpu: "8"
+          memory: "59Gi"
+  restartPolicy: Never

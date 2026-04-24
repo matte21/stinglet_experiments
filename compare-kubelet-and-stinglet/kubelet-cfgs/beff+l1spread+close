@@ -1,0 +1,7 @@
+topologyManagerPolicy: "best-effort"
+topologyManagerPolicyOptions:
+    prefer-closest-numa-nodes: "true"
+memoryManagerPolicy: "Static"
+cpuManagerPolicy: "static"
+cpuManagerPolicyOptions:
+  distribute-cpus-across-cores: "true"

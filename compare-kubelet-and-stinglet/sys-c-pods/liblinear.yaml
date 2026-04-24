@@ -1,0 +1,28 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: liblinear
+  annotations:
+    liblinear/cpus-distribution-over-caches: "l1-spread"
+spec:
+  containers:
+    - name: liblinear
+      image: localhost/mattedocker/liblinear-multicore:v0
+      command: ["./liblinear-multicore-train"]
+      args: ["-s", "6", "-m", "8", "/kdd12"]
+      resources:
+        requests:
+          cpu: "8"
+          memory: "70Gi"
+        limits:
+          cpu: "8"
+          memory: "70Gi"
+      volumeMounts:
+      - mountPath: /kdd12
+        name: dataset
+  volumes:
+    - name: dataset
+      hostPath:
+        type: File
+        path: /homes/molivi3/dm_orchestrator_node_agent_artifacts/experiments/compare-kubelet-pols-2/pods-volumes-files/kdd12
+  restartPolicy: Never

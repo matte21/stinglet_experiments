@@ -1,0 +1,5 @@
+[experiment_1]
+kubelet_bin=v1.33.0
+config=memmgr
+pods_trace_1=pagerank,blackscholes
+pods_trace_2=blackscholes,pagerank

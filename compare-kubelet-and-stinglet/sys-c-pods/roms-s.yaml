@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: roms-s
+  annotations:
+    roms-s/cpus-distribution-over-caches: "l1-spread"
+spec:
+  containers:
+    - name: roms-s
+      image: localhost/mattedocker/roms-s:v0
+      command: ["/bin/sh", "-c"]
+      args: ["./sroms_base.mytest-m64 < ocean_benchmark3.in"]
+      resources:
+        requests:
+          cpu: "8"
+          memory: "10445Mi"
+        limits:
+          cpu: "8"
+          memory: "10445Mi"
+  restartPolicy: Never

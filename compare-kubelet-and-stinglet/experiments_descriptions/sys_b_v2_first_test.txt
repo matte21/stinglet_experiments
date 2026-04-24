@@ -1,0 +1,13 @@
+[experiment_1]
+kubelet_bin=cxl-full-topo-awareness
+config=unified-far-mem
+pods_trace_1=xsbench-1-fm,xsbench-2-fm,xsbench-3-fm,roms-s,bwaves-s,pagerank,btree,liblinear-1
+pods_trace_2=roms-s,bwaves-s,pagerank,btree,liblinear-1,xsbench-1-fm,xsbench-2-fm,xsbench-3-fm
+pods_trace_3=xsbench-1-fm,roms-s,bwaves-s,pagerank,xsbench-2-fm,btree,liblinear-1,xsbench-3-fm
+
+[experiment_2]
+kubelet_bin=v1.33.0++
+config=beff+l1spread
+pods_trace_1=xsbench-1,xsbench-2,xsbench-3,roms-s,bwaves-s,pagerank,btree,liblinear-1
+pods_trace_2=roms-s,bwaves-s,pagerank,btree,liblinear-1,xsbench-1,xsbench-2,xsbench-3
+pods_trace_3=xsbench-1,roms-s,bwaves-s,pagerank,xsbench-2,btree,liblinear-1,xsbench-3

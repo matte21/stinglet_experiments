@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: blackscholes
+  annotations:
+    blackscholes/cpus-distribution-over-caches: "l1-spread"
+spec:
+  containers:
+    - name: blackscholes
+      image: localhost/mattedocker/mol-blackscholes:v0
+      command: ["/parsec-benchmark/bin/parsecmgmt"]
+      args: ["-a", "run", "-p", "blackscholes", "-i", "native", "-n", "1"]
+      resources:
+        requests:
+          cpu: "1"
+          memory: "630Mi"
+        limits:
+          cpu: "1"
+          memory: "630Mi"
+  restartPolicy: Never
