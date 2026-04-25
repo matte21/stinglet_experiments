@@ -1,0 +1,5 @@
+,,,,,
+,,,,,
+,no app on host,App 1 arrives,App 2 arrives
+free GiB on node 1,10.00,5.00,5.00
+free GiB on node 2,10.00,10.00,10.00
