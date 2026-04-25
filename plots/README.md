@@ -23,3 +23,7 @@ Run all scripts from the `plots/` directory:
 ```bash
 python scripts/<your_script>.py
 ```
+
+⚠️ To know which figure from the HCDS paper a script generates, open the script
+and read the comment at the top of it (after the imports), which states the
+figure number.
