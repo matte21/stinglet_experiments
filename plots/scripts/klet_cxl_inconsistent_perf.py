@@ -78,5 +78,3 @@ legend_ax.legend(handles=legend_elements,
 legend_fig.savefig('figures/klet_cxl_inconsistent_perf_legend.pdf', bbox_inches='tight', pad_inches=0.1)
 print("Saved figures/klet_cxl_inconsistent_perf.pdf")
 print("Saved figures/klet_cxl_inconsistent_perf_legend.pdf")
-
-plt.show()

@@ -77,5 +77,3 @@ legend_ax.legend(handles=legend_elements,
 legend_fig.savefig('figures/cpus_close_vs_far_to_cxl_legend.pdf', bbox_inches='tight', pad_inches=0.1)
 print("Saved figures/cpus_close_vs_far_to_cxl.pdf")
 print("Saved figures/cpus_close_vs_far_to_cxl_legend.pdf")
-
-plt.show()

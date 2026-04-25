@@ -77,5 +77,3 @@ legend_ax.legend(handles=legend_elements,
 legend_fig.savefig('figures/cxl_desired_vs_possible_legend.pdf', bbox_inches='tight', pad_inches=0.1)
 print("Saved figures/cxl_desired_vs_possible.pdf")
 print("Saved figures/cxl_desired_vs_possible_legend.pdf")
-
-plt.show()
