@@ -17,7 +17,7 @@ plt.rcParams.update({
 })
 
 # Read CSV, skipping empty rows
-df = pd.read_csv('data/klet_cxl_inconsistent_perf.csv', skiprows=2, index_col=0)
+df = pd.read_csv('data/kubelet_cxl_inconsistent_perf.csv', skiprows=2, index_col=0)
 
 # Set up the plot
 fig, ax = plt.subplots(figsize=(7, 3))
@@ -55,7 +55,7 @@ ax.spines['right'].set_visible(False)
 
 # Save the main plot without legend
 plt.tight_layout()
-plt.savefig('figures/klet_cxl_inconsistent_perf.pdf', bbox_inches='tight')
+plt.savefig('figures/kubelet_cxl_inconsistent_perf.pdf', bbox_inches='tight')
 
 # Create separate legend
 legend_fig, legend_ax = plt.subplots(figsize=(8, 1))
@@ -75,6 +75,6 @@ legend_ax.legend(handles=legend_elements,
                 handletextpad=0.5)
 
 # Save the legend PDF
-legend_fig.savefig('figures/klet_cxl_inconsistent_perf_legend.pdf', bbox_inches='tight', pad_inches=0.1)
-print("Saved figures/klet_cxl_inconsistent_perf.pdf")
-print("Saved figures/klet_cxl_inconsistent_perf_legend.pdf")
+legend_fig.savefig('figures/kubelet_cxl_inconsistent_perf_legend.pdf', bbox_inches='tight', pad_inches=0.1)
+print("Saved figures/kubelet_cxl_inconsistent_perf.pdf")
+print("Saved figures/kubelet_cxl_inconsistent_perf_legend.pdf")

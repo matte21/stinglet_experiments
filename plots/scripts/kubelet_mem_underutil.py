@@ -17,7 +17,7 @@ plt.rcParams.update({
 })
 
 # Read v2 CSV
-df = pd.read_csv('data/klet_mem_underutil.csv', skiprows=2, index_col=0)
+df = pd.read_csv('data/kubelet_mem_underutil.csv', skiprows=2, index_col=0)
 
 # Transpose so time points are rows and metrics are columns
 df = df.T
@@ -117,8 +117,8 @@ ax1.spines['right'].set_visible(False)
 
 # Save the plot
 plt.tight_layout()
-plt.savefig('figures/klet_mem_underutil.pdf', bbox_inches='tight')
-print("Plot saved as figures/klet_mem_underutil.pdf")
+plt.savefig('figures/kubelet_mem_underutil.pdf', bbox_inches='tight')
+print("Plot saved as figures/kubelet_mem_underutil.pdf")
 
 # Create legend
 fig_legend, ax_legend = plt.subplots(figsize=(8, 1))
@@ -129,5 +129,5 @@ handles, labels = ax1.get_legend_handles_labels()
 legend = ax_legend.legend(handles, labels, loc='center', 
                           ncol=2, frameon=False, fontsize=12)
 
-plt.savefig('figures/klet_mem_underutil_legend.pdf', bbox_inches='tight')
-print("Legend saved as figures/klet_mem_underutil_legend.pdf")
+plt.savefig('figures/kubelet_mem_underutil_legend.pdf', bbox_inches='tight')
+print("Legend saved as figures/kubelet_mem_underutil_legend.pdf")
