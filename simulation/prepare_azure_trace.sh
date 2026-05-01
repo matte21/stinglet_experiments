@@ -52,11 +52,11 @@ CREATE TABLE "events-machine-id-${mid}" (
     priority INTEGER NOT NULL,
     cores   REAL,
     memory  REAL,
-    cxl_memory_percent REAL,
+    cxl_mem_percent REAL,
     time    REAL
 );
 
-INSERT INTO "events-machine-id-${mid}" (vmId, priority, cores, memory, cxl_memory_percent, time)
+INSERT INTO "events-machine-id-${mid}" (vmId, priority, cores, memory, cxl_mem_percent, time)
 SELECT
     vm.vmId,
     vm.priority,
