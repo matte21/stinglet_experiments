@@ -4,11 +4,6 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
-# Percentage of VMs that request some CXL memory. If the user doesn't provide that value, use 37 as
-# that's the percentage of VMs that the Pond paper found can use CXL memory without degrading their
-# performance by more than 5%.
-readonly percentage_of_cxl_vms=${1:-37}
-
 # Download and unzip the trace: it's 173 MiB.
 readonly trace_url="https://azurepublicdatasettraces.blob.core.windows.net/azurepublicdatasetv2/azurevmallocation_dataset2020/AzurePackingTraceV1.zip"
 readonly trace_zip="trace.zip"
@@ -37,6 +32,18 @@ else
 fi
 
 echo
+
+# The Azure trace is from the pre-CXL days, and doesn't tell us which VMs can and can't use CXL
+# memory. To empirically ground our evaluation, we run two versions of each trace: one where 37% of
+# VMs can use CXL memory, and one where 20% of VMs can. The two numbers are from an empirical
+# analysis in Microsoft data centers, in the Pond and GreenSKU papers, respectively. Note that in
+# those papers they either put all the memory of a CXL VM in CXL memory (greenSKU), or use ML to
+# decide the split between normal and CXL memory. For simplicity, we randomly choose between
+# 5%, 10%, 50% and 100% of the VM memory request in CXL memory.
+readonly percentage_of_cxl_vms_pond=37
+readonly percentage_of_cxl_vms_greensku=20
+
+# Create additional tables. The resulting DB size is 2.7 GiB. 
 readonly machine_ids=(4 10 17 20 27 21 16 11 1 6 34 19)
 for mid in "${machine_ids[@]}"; do
     if ! sqlite3 "$trace_db" ".tables" | grep -qw "events-machine-id-${mid}"; then
@@ -52,17 +59,27 @@ CREATE TABLE "events-machine-id-${mid}" (
     priority INTEGER NOT NULL,
     cores   REAL,
     memory  REAL,
-    cxl_mem_percent REAL,
+    cxl_mem_percent_pond INTEGER,
+    cxl_mem_percent_greensku INTEGER,
     time    REAL
 );
 
-INSERT INTO "events-machine-id-${mid}" (vmId, priority, cores, memory, cxl_mem_percent, time)
+INSERT INTO "events-machine-id-${mid}" (vmId, priority, cores, memory, cxl_mem_percent_pond, cxl_mem_percent_greensku, time)
 SELECT
     vm.vmId,
     vm.priority,
     vt.core,
     vt.memory,
-    CASE WHEN ABS(RANDOM()) % 100 < ${percentage_of_cxl_vms}
+    CASE WHEN ABS(RANDOM()) % 100 < ${percentage_of_cxl_vms_pond}
+        THEN CASE ABS(RANDOM()) % 4
+            WHEN 0 THEN 5
+            WHEN 1 THEN 10
+            WHEN 2 THEN 50
+            WHEN 3 THEN 100
+        END
+        ELSE 0
+    END,
+    CASE WHEN ABS(RANDOM()) % 100 < ${percentage_of_cxl_vms_greensku}
         THEN CASE ABS(RANDOM()) % 4
             WHEN 0 THEN 5
             WHEN 1 THEN 10
