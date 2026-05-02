@@ -8,7 +8,7 @@ source ../env.sh
 
 if [[ -z "${1:-}" ]]; then
     echo "Fatal: invalid arguments."
-    echo "Usage: $0 <file name of experiment description file in dir \"experiments_descriptions\">"
+    echo "Usage: $0 <file name of experiment description file in dir \"./experiments_descriptions\">"
     exit 1
 fi
 readonly experiment_file="$1"
@@ -23,4 +23,4 @@ done
 # Prepare folder where we'll store experiments data.
 readonly output_folder="collected-data/$(date +'%Y-%m-%d-%H-%M-%S')"
 mkdir -p "$output_folder"
-cp experiments_descriptions/$experiment_file $output_folder
+cp "experiments_descriptions/$experiment_file" "$output_folder"
