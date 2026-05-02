@@ -4,7 +4,7 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
-source ../env.sh
+source ../shared/env.sh
 
 if [[ -z "${1:-}" ]]; then
     echo "Fatal: invalid arguments."
@@ -12,6 +12,7 @@ if [[ -z "${1:-}" ]]; then
     exit 1
 fi
 readonly experiment_file="$1"
+
 
 # Start the container runtime, CRI-O.
 sudo systemctl start crio.service

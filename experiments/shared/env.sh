@@ -18,3 +18,6 @@ readonly k8s_repo="https://github.com/matte21/private-k8s"
 readonly k8s_src_dir="$HOME/k8s"
 readonly kubelet_bins_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/kubelet-bins"
 readonly k8s_branches_to_test="v1.33.0-std v1.33.0++ stinglet"
+
+# Name of the file with the DB holding the azure trace for simulation experiments.
+readonly trace_db_file="packing_trace_zone_a_v1.sqlite"

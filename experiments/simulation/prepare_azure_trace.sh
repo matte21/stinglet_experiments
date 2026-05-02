@@ -4,17 +4,18 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
+source ../shared/env.sh
+
 # Download and unzip the trace: it's 173 MiB.
 readonly trace_url="https://azurepublicdatasettraces.blob.core.windows.net/azurepublicdatasetv2/azurevmallocation_dataset2020/AzurePackingTraceV1.zip"
 readonly trace_zip="trace.zip"
-readonly trace_db="packing_trace_zone_a_v1.sqlite"
-if [[ -f "$trace_db" || -f "$trace_zip" ]]; then
+if [[ -f "$trace_db_file" || -f "$trace_zip" ]]; then
     echo "Not downloading trace since it already exists."
 else
     echo "Downloading trace..."
     curl "$trace_url" -o "$trace_zip"
 fi
-if [[ ! -f "$trace_db" ]]; then
+if [[ ! -f "$trace_db_file" ]]; then
     unzip "$trace_zip"
     rm "$trace_zip"
 fi
@@ -46,11 +47,11 @@ readonly percentage_of_cxl_vms_greensku=20
 # Create additional tables. The resulting DB size is 2.7 GiB. 
 readonly machine_ids=(4 10 17 20 27 21 16 11 1 6 34 19)
 for mid in "${machine_ids[@]}"; do
-    if ! sqlite3 "$trace_db" ".tables" | grep -qw "events-machine-id-${mid}"; then
+    if ! sqlite3 "$trace_db_file" ".tables" | grep -qw "events-machine-id-${mid}"; then
 
         echo "creating arrival and departures table for machine type $mid..." 
 
-        sqlite3 "$trace_db" << EOF
+        sqlite3 "$trace_db_file" << EOF
 
 BEGIN;
 
@@ -108,7 +109,7 @@ EOF
 done
 
 echo
-echo "trace database has size $(du -sh "$trace_db" | cut -f1)"
+echo "trace database has size $(du -sh "$trace_db_file" | cut -f1)"
 
 # machine type = physical server
 # vm type = pre-configured VM sizes.
