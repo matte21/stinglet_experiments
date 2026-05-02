@@ -1,0 +1,3 @@
+topologyManagerPolicy: "none"
+cpuManagerPolicy: "static"
+memoryManagerPolicy: "Static"

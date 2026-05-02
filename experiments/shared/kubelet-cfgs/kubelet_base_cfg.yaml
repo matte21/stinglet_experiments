@@ -1,0 +1,40 @@
+apiVersion: kubelet.config.k8s.io/v1beta1
+kind: KubeletConfiguration
+authentication:
+  webhook:
+    enabled: false # Do NOT use in production clusters!
+authorization:
+  mode: AlwaysAllow # Do NOT use in production clusters!
+enableServer: false
+logging:
+  format: text
+address: 127.0.0.1 # Restrict access to localhost
+readOnlyPort: 10255 # Do NOT use in production clusters!
+staticPodPath: /etc/kubernetes/manifests
+containerRuntimeEndpoint: unix:///var/run/crio/crio.sock
+featureGates:
+  TopologyManagerPolicyAlphaOptions: true
+  CPUManagerPolicyAlphaOptions: true
+kubeReserved:
+  memory: "500Mi"  
+reservedMemory:
+  - numaNode: 0
+    limits:
+      memory: "600Mi"
+reservedSystemCPUs: "0,1"
+cpuCFSQuota: false
+cgroupDriver: "cgroupfs"
+# This disables disk pressure based image garbage collection.
+# On the machine I'm running tests on, for some reason when the kubelet stops it GC the images my
+# pods use. That's annoying because the connection is slow and I don't want the kubelet to pull
+# all images from scratch on every experiment (it'd make the experiments too slow!).
+# Setting imageGCHighThresholdPercent to 100 and imageMaximumGCAge to 0 disables image GC.
+imageGCLowThresholdPercent: 99
+imageGCHighThresholdPercent: 100
+imageMaximumGCAge: "0s"
+evictionHard:
+  memory.available: "100Mi"
+  nodefs.available: "1Mi"
+evictionMinimumReclaim:
+  memory.available: "0Mi"
+  imagefs.available: "2Gi"

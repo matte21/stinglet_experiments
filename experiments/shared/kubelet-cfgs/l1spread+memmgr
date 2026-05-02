@@ -1,0 +1,4 @@
+memoryManagerPolicy: "Static"
+cpuManagerPolicy: "static"
+cpuManagerPolicyOptions:
+  distribute-cpus-across-cores: "true"

@@ -1,0 +1,5 @@
+topologyManagerPolicy: "best-effort"
+cpuManagerPolicy: "static"
+memoryManagerPolicy: "Static"
+cpuManagerPolicyOptions:
+  distribute-cpus-across-cores: "true"
