@@ -4,7 +4,7 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
-source ../../shared/env.sh
+source "$(dirname "${BASH_SOURCE[0]}")/../../shared/env.sh"
 
 if [[ $# -ne 2 ]]; then
     echo "Invalid arguments!"

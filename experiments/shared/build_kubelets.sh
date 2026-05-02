@@ -4,7 +4,7 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
-source env.sh
+source "$(dirname "${BASH_SOURCE[0]}")/env.sh"
 
 if [ ! -d "$k8s_src_dir" ]; then
     echo "Directory with k8s source code $k8s_src_dir doesn't exist: cloning k8s repo to it."
