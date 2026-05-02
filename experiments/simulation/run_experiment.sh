@@ -13,7 +13,6 @@ if [[ -z "${1:-}" ]]; then
 fi
 readonly experiment_file="$1"
 
-
 # Start the container runtime, CRI-O.
 sudo systemctl start crio.service
 while [[ "$(sudo systemctl is-active crio.service)" != "active" ]]; do
@@ -21,7 +20,15 @@ while [[ "$(sudo systemctl is-active crio.service)" != "active" ]]; do
     echo waiting for cri-o service to get up and running.
 done
 
+# If we don't have the file holding the Azure arrival traces, create it.
+if [[ ! -f "$trace_db_file" ]]; then
+    ./prepare_azure_trace.sh
+else
+    echo "Azure trace already present, not downloading."
+fi
+
 # Prepare folder where we'll store experiments data.
 readonly output_folder="collected-data/$(date +'%Y-%m-%d-%H-%M-%S')"
 mkdir -p "$output_folder"
 cp "experiments_descriptions/$experiment_file" "$output_folder"
+
