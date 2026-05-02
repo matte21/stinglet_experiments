@@ -4,7 +4,7 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
-source ../../shared/env.sh
+source "$(dirname "${BASH_SOURCE[0]}")/../../shared/env.sh"
 
 # Download and unzip the trace: it's 173 MiB.
 readonly trace_url="https://azurepublicdatasettraces.blob.core.windows.net/azurepublicdatasetv2/azurevmallocation_dataset2020/AzurePackingTraceV1.zip"

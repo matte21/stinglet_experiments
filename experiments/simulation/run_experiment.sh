@@ -25,7 +25,7 @@ done
 if [[ ! -f "$trace_db_file" ]]; then
     ./helpers-scripts/prepare_azure_trace.sh
 else
-    echo "Azure trace already present, not downloading."
+    echo "Azure trace already present, not downloading it."
 fi
 
 # Prepare folder where we'll store experiments data.
@@ -64,11 +64,11 @@ while [[ "${#experiments_desc[@]}" -gt 0 ]]; do
         exit 1
     fi
 
-    echo "Starting kubelet with binary $kubelet_bin and config file $kubelet_cfg, experiment $experiment_name"
-    ./helpers-scripts/start_kubelet.sh "$kubelet_bins_dir/$kubelet_bin" "$kubelet_cfgs_dir/$kubelet_cfg"
-
     azure_machine_ids=$(echo "${experiments_desc[3]}" | cut -d '=' -f 2)
     cxl_vms_percentage=$(echo "${experiments_desc[4]}" | cut -d '=' -f 2)
+
+    echo "Starting kubelet with binary $kubelet_bin and config file $kubelet_cfg, experiment $experiment_name"
+    ./helpers-scripts/start_kubelet.sh "$kubelet_bins_dir/$kubelet_bin" "$kubelet_cfgs_dir/$kubelet_cfg"
 
     # todo: add playing of traces.
 

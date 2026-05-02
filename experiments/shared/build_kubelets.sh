@@ -36,6 +36,6 @@ for b in $k8s_branches_to_test; do
     # "all" means that version information will be added as well
     make all WHAT=cmd/kubelet || { echo "Building kubelet branch $b failed!"; exit 1; }
 
-    sudo mv "$k8s_src_dir/_output/bin/kubelet" "$kubelet_bins_dir/$b"
+    sudo mv "./_output/bin/kubelet" "$kubelet_bins_dir/$b"
     chmod +x "$kubelet_bins_dir/$b"
 done
