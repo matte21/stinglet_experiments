@@ -29,9 +29,9 @@ else
 fi
 
 # Prepare folder where we'll store experiments data.
-readonly output_folder="collected-data/$(date +'%Y-%m-%d-%H-%M-%S')"
-mkdir -p "$output_folder"
-cp "experiments-descriptions/$experiment_file" "$output_folder"
+readonly results_dir="collected-data/$(date +'%Y-%m-%d-%H-%M-%S')"
+mkdir -p "$results_dir"
+cp "experiments-descriptions/$experiment_file" "$results_dir"
 
 # Store the whole experiments description file in an array, where each item holds a single line.
 mapfile -t experiments_desc < <(grep . experiments-descriptions/$experiment_file)
@@ -65,12 +65,16 @@ while [[ "${#experiments_desc[@]}" -gt 0 ]]; do
     fi
 
     azure_machine_ids=$(echo "${experiments_desc[3]}" | cut -d '=' -f 2)
-    cxl_vms_percentage=$(echo "${experiments_desc[4]}" | cut -d '=' -f 2)
+    cxl_vms_percentages_names=$(echo "${experiments_desc[4]}" | cut -d '=' -f 2)
+    if [[ "$kubelet_bin" != "stinglet" ]]; then
+        # only stinglet understands that some VMs want a fraction of their memory in CXL.
+        cxl_vms_percentages_names=""
+    fi
 
     echo "Starting kubelet with binary $kubelet_bin and config file $kubelet_cfg, experiment $experiment_name"
     ./helpers-scripts/start_kubelet.sh "$kubelet_bins_dir/$kubelet_bin" "$kubelet_cfgs_dir/$kubelet_cfg"
 
-    # todo: add playing of traces.
+    ./helpers-scripts/play_traces.sh "$azure_machine_ids" "$cxl_vms_percentages_names" "../$results_dir"
 
     echo "Stopping kubelet with binary $kubelet_bin and config file $kubelet_cfg, experiment $experiment_name"
     ./helpers-scripts/stop_kubelet.sh
