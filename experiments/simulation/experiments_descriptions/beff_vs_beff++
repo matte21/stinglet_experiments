@@ -1,0 +1,9 @@
+[experiment_1]
+kubelet_bin=v1.33.0-std
+config=beff
+machine_ids=16
+
+[experiment_2]
+kubelet_bin=v1.33.0++
+config=beff
+machine_ids=16
