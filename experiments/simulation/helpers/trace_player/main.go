@@ -23,8 +23,8 @@ var (
 )
 
 type kubeletLogLineHandler struct {
-	admitTimeFile   *os.File
-	admitTimeRegexp *regexp.Regexp
+	admitTimeSamplesFile *os.File
+	admitTimeRegexp      *regexp.Regexp
 }
 
 func main() {
@@ -40,8 +40,8 @@ func main() {
 	stop := make(chan time.Time)
 	defer close(stop)
 	startKubeletAdmitTimeCollectionOrDie(stop, &kubeletLogLineHandler{
-		admitTimeFile:   f,
-		admitTimeRegexp: regexp.MustCompile(`time="([^"]+)"`),
+		admitTimeSamplesFile: f,
+		admitTimeRegexp:      regexp.MustCompile(`time="([^"]+)"`),
 	})
 
 	// play trace
@@ -153,8 +153,8 @@ func (h *kubeletLogLineHandler) Write(l []byte) (int, error) {
 				return 0, fmt.Errorf("failed to parse admit time duration %s: %w", admit_time[1], err)
 			}
 			usecs := d.Microseconds()
-			if _, err := fmt.Fprintf(h.admitTimeFile, ",%d,,\n", usecs); err != nil {
-				return 0, fmt.Errorf("failed to write admit time to %s: %w", h.admitTimeFile.Name(), err)
+			if _, err := fmt.Fprintf(h.admitTimeSamplesFile, ",%d,,\n", usecs); err != nil {
+				return 0, fmt.Errorf("failed to write admit time to %s: %w", h.admitTimeSamplesFile.Name(), err)
 			}
 		}
 	}
