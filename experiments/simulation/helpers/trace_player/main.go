@@ -18,8 +18,8 @@ var (
 	traceDB              string
 	resultsFilePrefix    string
 	resultsDir           string
-	machineID            int
 	cxlVMsPercentageName string
+	machineID            int
 )
 
 type kubeletLogLineHandler struct {
@@ -52,10 +52,15 @@ func parseFlagsOrDie() {
 	flag.StringVar(&traceDB, "trace-db", "", "Path to the SQLite trace database file")
 	flag.StringVar(&resultsFilePrefix, "results-file-prefix", "", "Prefix for result files names")
 	flag.StringVar(&resultsDir, "results-dir", "", "Path to the directory where results are stored")
-	flag.IntVar(&machineID, "machine-id", -1, "Azure machine type ID")
 	flag.StringVar(&cxlVMsPercentageName, "cxl-vms-percentage-name", "", "Name of the CXL VMs percentage (e.g. pond, greensku, or nop)")
+	flag.IntVar(&machineID, "machine-id", -1, "Azure machine type ID")
 
 	flag.Parse()
+
+	traceDB = strings.TrimSpace(traceDB)
+	resultsFilePrefix = strings.TrimSpace(resultsFilePrefix)
+	resultsDir = strings.TrimSpace(resultsDir)
+	cxlVMsPercentageName = strings.ToLower(strings.TrimSpace(cxlVMsPercentageName))
 
 	if traceDB == "" {
 		fmt.Fprintln(os.Stderr, "Fatal: --trace-db is required and must be non-empty.")
@@ -72,12 +77,6 @@ func parseFlagsOrDie() {
 		flag.Usage()
 		os.Exit(1)
 	}
-	if machineID == -1 {
-		fmt.Fprintln(os.Stderr, "Fatal: --machine-id is required")
-		flag.Usage()
-		os.Exit(1)
-	}
-	cxlVMsPercentageName = strings.ToLower(strings.TrimSpace(cxlVMsPercentageName))
 	if cxlVMsPercentageName == "" {
 		fmt.Fprintln(os.Stderr, "Fatal: --cxl-vms-percentage-name is required, and must be one between greensku, pond, and nop.")
 		flag.Usage()
@@ -85,6 +84,11 @@ func parseFlagsOrDie() {
 	}
 	if cxlVMsPercentageName != "pond" && cxlVMsPercentageName != "greensku" && cxlVMsPercentageName != "nop" {
 		fmt.Fprintf(os.Stderr, "Fatal: --cxl-vms-percentage-name has value %s; must be one of: pond, greensku, nop.\n", cxlVMsPercentageName)
+		flag.Usage()
+		os.Exit(1)
+	}
+	if machineID == -1 {
+		fmt.Fprintln(os.Stderr, "Fatal: --machine-id is required")
 		flag.Usage()
 		os.Exit(1)
 	}
