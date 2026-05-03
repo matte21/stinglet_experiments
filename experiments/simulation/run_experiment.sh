@@ -23,7 +23,7 @@ done
 
 # If we don't have the file holding the Azure arrival traces, create it.
 if [[ ! -f "$trace_db_file" ]]; then
-    ./helpers-scripts/prepare_azure_trace.sh
+    ./helpers/prepare_azure_trace.sh
 else
     echo "Azure trace already present, not downloading it."
 fi
@@ -72,12 +72,12 @@ while [[ "${#experiments_desc[@]}" -gt 0 ]]; do
     fi
 
     echo "Starting kubelet with binary $kubelet_bin and config file $kubelet_cfg, experiment $experiment_name"
-    ./helpers-scripts/start_kubelet.sh "$kubelet_bins_dir/$kubelet_bin" "$kubelet_cfgs_dir/$kubelet_cfg"
+    ./helpers/start_kubelet.sh "$kubelet_bins_dir/$kubelet_bin" "$kubelet_cfgs_dir/$kubelet_cfg"
 
-    ./helpers-scripts/play_traces.sh "$azure_machine_ids" "$cxl_vms_percentages_names" "../$results_dir"
+    ./helpers/play_traces.sh "$azure_machine_ids" "$cxl_vms_percentages_names" "../$results_dir"
 
     echo "Stopping kubelet with binary $kubelet_bin and config file $kubelet_cfg, experiment $experiment_name"
-    ./helpers-scripts/stop_kubelet.sh
+    ./helpers/stop_kubelet.sh
 
     # Remove lines of current experiment and move cursor to lines describing the next experiment.
     experiments_desc=("${experiments_desc[@]:5}")
