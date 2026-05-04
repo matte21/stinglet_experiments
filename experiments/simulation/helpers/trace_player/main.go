@@ -23,51 +23,8 @@ import (
 	k8sresources "k8s.io/apimachinery/pkg/api/resource"
 )
 
-// CLI flags.
-var (
-	resultsDir            string
-	resultsFilePrefix     string
-	traceDB               string
-	traceMachineID        int
-	cxlPercentageDBColumn string
-)
-
 // TODO: check that our logic on log filtering makes sense: we might see the admit time even on rejections!
-
-// The following variables track some statistics we care about, either for the paper results, or
-// as sanity checks.
-// All names are self-explanatory, except for ignoredPodsCount. It counts the pods that haven't
-// been scheduled to our reference host because it didn't have enough free memory and CPUs.
-var (
-	podsCount                    uint32
-	ignoredPodsCount             uint32
-	rejectedPodsCount            uint32
-	admittedPodsCount            uint32
-	podsThatUseCXLCount          uint32
-	admittedPodsThatUseCXLCount  uint32
-	admitTimeSamplesCount        atomic.Uint32
-	admitTimeSamplesWrittenCount uint32
-)
-
-// totals are used to scale the VM/pods resource requests (which are relative to the host's capacity).
-// frees are used to check whether a VM/pod fits on the host where stinglet/kubelet is running.
-var (
-	// TODO: init total values.
-	hostTotalBytes int64
-	hostFreeBytes  int64
-
-	hostTotalMilliCores int64
-	hostFreeMilliCores  int64
-)
-
-var (
-	//go:embed pod_manifest.yaml.tmpl
-	podManifestTemplateStr string
-	podManifestTemplate    *template.Template
-	// Map to store values of per-pod fields that will be used to render the manifest out of the
-	// template.
-	podFields map[string]any
-)
+// TODO: check against kubelet's own data structures.
 
 const (
 	staticPodsDir = "/etc/kubernetes/manifests"
@@ -76,11 +33,58 @@ const (
 	unexpectedAdmissionErr = "UnexpectedAdmissionError"
 )
 
-var kubeletClient *http.Client
+var (
+	// CLI flags.
+	resultsDir            string
+	resultsFilePrefix     string
+	traceDB               string
+	traceMachineID        int
+	cxlPercentageDBColumn string
+
+	// Thes variables track some statistics we care about, either for the paper results, or
+	// as sanity checks.
+	// All names are self-explanatory, except for ignoredPodsCount. It counts the pods that haven't
+	// been scheduled to our reference host because it didn't have enough free memory and CPUs.
+	podsCount                    uint32
+	ignoredPodsCount             uint32
+	rejectedPodsCount            uint32
+	admittedPodsCount            uint32
+	podsThatUseCXLCount          uint32
+	admittedPodsThatUseCXLCount  uint32
+	admitTimeSamplesCount        atomic.Uint32
+	admitTimeSamplesWrittenCount uint32
+
+	// totals are used to scale the VM/pods resource requests (which are relative to the host's capacity).
+	// frees are used to check whether a VM/pod fits on the host where stinglet/kubelet is running.
+	// TODO: init total values.
+	hostTotalBytes      int64
+	hostFreeBytes       int64
+	hostTotalMilliCores int64
+	hostFreeMilliCores  int64
+
+	//go:embed pod_manifest.yaml.tmpl
+	podManifestTemplateStr string
+	podManifestTemplate    *template.Template
+	// Map to store values of per-pod fields that will be used to render the manifest out of the
+	// template.
+	podFields map[string]any
+
+	kubeletClient *http.Client
+
+	vmIDToRunningPod map[int64]*runningPod
+)
 
 type kubeletLogLineHandler struct {
 	admitTimeSamplesFile *os.File
 	admitTimeRegexp      *regexp.Regexp
+}
+
+type runningPod struct {
+	manifestPath         string
+	requestedCXLMemBytes int64
+	requestedBytes       int64
+	requestedMilliCores  int64
+	isGuaranteed         bool
 }
 
 func main() {
@@ -88,6 +92,8 @@ func main() {
 
 	podManifestTemplate = template.Must(template.New("pod-manifest").Parse(podManifestTemplateStr))
 	podFields = make(map[string]any, 6)
+
+	vmIDToRunningPod = make(map[int64]*runningPod)
 
 	f := openAndInitAdmitTimesFileOrDie()
 	defer func() {
@@ -121,7 +127,7 @@ func main() {
 	// stored.
 	traceEvents, cleanupFunc, err := getTrace()
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "Fatal: failed to get trace of VMs/pods arrivals and departures: %s.", err)
+		fmt.Fprintf(os.Stderr, "Fatal: failed to get trace of VMs/pods arrivals and departures: %s\n", err)
 		// return instead of os.Exit so that deferred functions still execute.
 		return
 	}
@@ -131,6 +137,7 @@ func main() {
 		Timeout: 5 * time.Second,
 	}
 
+	// todo: consider error handling within the trace.
 	playTrace(traceEvents)
 }
 
@@ -271,9 +278,9 @@ func getTrace() (trace *sql.Rows, cleanup func(), err error) {
 
 	var query string
 	if cxlPercentageDBColumn == "nop" {
-		query = fmt.Sprintf(`SELECT priority, cores, memory FROM "events-machine-id-%d" ORDER BY time`, traceMachineID)
+		query = fmt.Sprintf(`SELECT vmId, priority, cores, memory FROM "events-machine-id-%d" ORDER BY time`, traceMachineID)
 	} else {
-		query = fmt.Sprintf(`SELECT priority, cores, memory, cxl_mem_percent_%s FROM "events-machine-id-%d" ORDER BY time`,
+		query = fmt.Sprintf(`SELECT vmId, priority, cores, memory, cxl_mem_percent_%s FROM "events-machine-id-%d" ORDER BY time`,
 			cxlPercentageDBColumn, traceMachineID)
 	}
 	trace, err = db.Query(query)
@@ -297,7 +304,8 @@ func getTrace() (trace *sql.Rows, cleanup func(), err error) {
 // todo: consider error handling within the trace.
 func playTrace(traceEvents *sql.Rows) error {
 	// collectively this variables describe a trace event.
-	var priority int
+	var vmID int64
+	var priority int64
 	var cores float64
 	var memory float64
 	var cxlMemPercent sql.NullInt32
@@ -307,31 +315,37 @@ func playTrace(traceEvents *sql.Rows) error {
 	for traceEvents.Next() {
 		// Read a single event, either a VM/Pod arrival/departure.
 		if cxlPercentageDBColumn == "nop" {
-			err = traceEvents.Scan(&priority, &cores, &memory)
+			err = traceEvents.Scan(&vmID, &priority, &cores, &memory)
 		} else {
-			err = traceEvents.Scan(&priority, &cores, &memory, &cxlMemPercent)
+			err = traceEvents.Scan(&vmID, &priority, &cores, &memory, &cxlMemPercent)
 		}
 		if err != nil {
 			return fmt.Errorf("failed to scan sql row storing trace event: %w", err)
 		}
 
 		if eventIsArrival(cores) {
-			if err := handleArrival(priority, cores, memory, cxlMemPercent); err != nil {
-				return fmt.Errorf("failed to handle arrival: %w", err)
+			if err := handleArrival(vmID, priority, cores, memory, cxlMemPercent); err != nil {
+				return fmt.Errorf("failed to handle arrival of vmID %d: %w", vmID, err)
 			}
 		} else {
-			// process departure.
+			if err := handleDeparture(vmID); err != nil {
+				return fmt.Errorf("failed to handle departure of vmID %d: %w", vmID, err)
+			}
 		}
 	}
 
 	return nil
 }
 
-func handleArrival(priority int, normalizedCores, normalizedMemory float64, cxlMemPercent sql.NullInt32) error {
+func handleArrival(vmID, priority int64, normalizedCores, normalizedMemory float64, cxlMemPercent sql.NullInt32) error {
 	podsCount++
 
 	requestedBytes := int64(float64(hostTotalBytes) * normalizedMemory)
-	requestedCXLBytes := int64(float64(requestedBytes) * (float64(cxlMemPercent.Int32) / 100))
+	requestedCXLBytes := int64(0)
+	if cxlMemPercent.Valid && cxlMemPercent.Int32 > 0 {
+		requestedCXLBytes = int64(float64(requestedBytes) * (float64(cxlMemPercent.Int32) / 100))
+		podsThatUseCXLCount++
+	}
 	requestedBytes -= requestedCXLBytes
 	requestedMilliCores := int64(float64(hostTotalMilliCores) * normalizedCores)
 
@@ -342,10 +356,6 @@ func handleArrival(priority int, normalizedCores, normalizedMemory float64, cxlM
 	// constraint. We enforce it by rounding up.
 	if isGuaranteed && requestedMilliCores%1000 != 0 {
 		requestedMilliCores += 1000 - (requestedMilliCores % 1000)
-	}
-
-	if cxlMemPercent.Valid && cxlMemPercent.Int32 > 0 {
-		podsThatUseCXLCount++
 	}
 
 	// If the pod doesn't fit on our reference host we ignore it - it's as if the cluster scheduler
@@ -372,14 +382,47 @@ func handleArrival(priority int, normalizedCores, normalizedMemory float64, cxlM
 		return nil
 	}
 
-	// todo handle admission
-
 	admittedPodsCount++
-	// If accepted.
-	// Add to active set.
-	// read kubelet files -- need connection.
-	// update resource availability.
-	// sample memory utilization => need file.
+
+	if requestedCXLBytes > 0 {
+		admittedPodsThatUseCXLCount++
+	}
+
+	// Record the pod in the trace table (i.e. its VM ID since the trace is about VMs), so
+	// that when we reach the departure in the trace we know which pod we have to delete.
+	vmIDToRunningPod[vmID] = &runningPod{
+		manifestPath:         podFileName(podsCount),
+		requestedCXLMemBytes: requestedCXLBytes,
+		requestedBytes:       requestedBytes,
+		requestedMilliCores:  requestedMilliCores,
+		isGuaranteed:         isGuaranteed,
+	}
+
+	hostFreeBytes -= requestedCXLBytes + requestedBytes
+	hostFreeMilliCores -= requestedMilliCores
+
+	return nil
+}
+
+func handleDeparture(vmID int64) error {
+	pod, isRunning := vmIDToRunningPod[vmID]
+	if !isRunning {
+		return nil
+	}
+
+	if err := os.Remove(pod.manifestPath); err != nil {
+		return fmt.Errorf("failed to delete file %s on pod departure: %w", pod.manifestPath, err)
+	}
+
+	for {
+
+	}
+
+	hostFreeBytes += pod.requestedCXLMemBytes + pod.requestedBytes
+	hostFreeMilliCores += pod.requestedMilliCores
+	delete(vmIDToRunningPod, vmID)
+
+	return nil
 }
 
 // In the trace, arrivals are described by resource requests >=0, departures as resource
@@ -388,7 +431,7 @@ func eventIsArrival(resourceRequest float64) bool {
 	return resourceRequest >= 0
 }
 
-func podIsGuaranteed(priority int) bool {
+func podIsGuaranteed(priority int64) bool {
 	return priority == 0
 }
 
@@ -429,20 +472,9 @@ func podRejected(podID uint32) (bool, error) {
 	var i uint64
 	podName := "p-" + strconv.Itoa(int(podID))
 	for {
-		resp, err := kubeletClient.Get(podsHealthAPI)
+		allPods, err := getPodsFromKubelet()
 		if err != nil {
-			return false, fmt.Errorf("failed to GET pods from kubelet API %s: %w", podsHealthAPI, err)
-		}
-
-		var allPods k8sapi.PodList
-		err = json.NewDecoder(resp.Body).Decode(&allPods)
-		if closeErr := resp.Body.Close(); closeErr != nil {
-			fmt.Fprintf(os.Stderr, "Failed to close HTTP response from kubelet API %s: %s\n",
-				podsHealthAPI, closeErr)
-		}
-		if err != nil {
-			return false, fmt.Errorf("failed to decode pods list from kubelet API %s into Go struct: %w",
-				podsHealthAPI, err)
+			return false, err
 		}
 
 		for _, p := range allPods.Items {
@@ -483,4 +515,25 @@ func podRejected(podID uint32) (bool, error) {
 
 func podFileName(podID uint32) string {
 	return filepath.Join(staticPodsDir, strconv.Itoa(int(podID))+".yaml")
+}
+
+func getPodsFromKubelet() (k8sapi.PodList, error) {
+	resp, err := kubeletClient.Get(podsHealthAPI)
+	if err != nil {
+		return k8sapi.PodList{}, fmt.Errorf("failed to GET pods from kubelet API %s: %w", podsHealthAPI, err)
+	}
+	defer func() {
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			fmt.Fprintf(os.Stderr, "Failed to close HTTP response from kubelet API %s: %s\n",
+				podsHealthAPI, closeErr)
+		}
+	}()
+
+	var allPods k8sapi.PodList
+	if err := json.NewDecoder(resp.Body).Decode(&allPods); err != nil {
+		return k8sapi.PodList{}, fmt.Errorf("failed to decode pods list from kubelet API %s into Go struct: %w",
+			podsHealthAPI, err)
+	}
+
+	return allPods, nil
 }
