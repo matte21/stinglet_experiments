@@ -25,10 +25,24 @@ var (
 	cxlPercentageDBColumn string
 )
 
+// All names are self-explanatory, except for ignoredPodsCount. That counts the pods that haven't
+// been scheduled to our reference host because it didn't have enough free memory and CPUs.
 var (
+	ignoredPodsCount             uint32
+	rejectedPodsCount            uint32
 	admittedPodsCount            uint32
 	admitTimeSamplesCount        atomic.Uint32
 	admitTimeSamplesWrittenCount uint32
+)
+
+// totals are used to scale the VM/pods resource requests (which are relative to the host's capacity).
+// frees are used to check whether a VM/pod fits on the host where stinglet/kubelet is running.
+var (
+	hostTotalBytes uint64
+	hostFreeBytes  uint64
+
+	hostTotalMilliCores uint64
+	hostFreeMilliCores  uint64
 )
 
 type kubeletLogLineHandler struct {
@@ -67,6 +81,8 @@ func main() {
 		admitTimeRegexp:      regexp.MustCompile(`time="([^"]+)"`),
 	})
 
+	// Load the table storing the VMs/pods arrivals and departures from the SQLite DB where it's
+	// stored.
 	traceEvents, cleanupFunc, err := getTrace()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "Fatal: failed to get trace of VMs/pods arrivals and departures: %s.", err)
@@ -75,7 +91,6 @@ func main() {
 	}
 	defer cleanupFunc()
 
-	// play trace
 	playTrace(traceEvents)
 }
 
@@ -197,7 +212,7 @@ func (h *kubeletLogLineHandler) Write(l []byte) (int, error) {
 	return len(l), nil
 }
 
-// Invoke cleanup only if err == nil (you can invoke it even if err != nil, but it's a nop). 
+// Invoke cleanup only if err == nil (you can invoke it even if err != nil, but it's a nop).
 func getTrace() (trace *sql.Rows, cleanup func(), err error) {
 	cleanup = func() {}
 
@@ -236,54 +251,61 @@ func getTrace() (trace *sql.Rows, cleanup func(), err error) {
 		}
 	}
 
-	return 
+	return
 }
 
-func playTrace() error {
-	// Connect to the DB storing the trace.
-	db, err := sql.Open("sqlite", traceDB)
-	if err != nil {
-		return fmt.Errorf("Fatal: failed to open trace DB %s: %w", traceDB, err)
-	}
-	defer func() {
-		if err := db.Close(); err != nil {
-			fmt.Fprintf(os.Stderr, "Failed to close trace DB %s: %v\n", traceDB, err)
+func playTrace(traceEvents *sql.Rows) error {
+	// collectively this variables describe a trace event.
+	var priority int
+	var cores float64
+	var memory float64
+	var cxlMemPercent sql.NullInt32
+
+	var err error
+
+	for traceEvents.Next() {
+		// Read a single event, either a VM/Pod arrival/departure.
+		if cxlPercentageDBColumn == "nop" {
+			err = traceEvents.Scan(&priority, &cores, &memory)
+		} else {
+			err = traceEvents.Scan(&priority, &cores, &memory, &cxlMemPercent)
 		}
-	}()
-
-	// Query the table storing the trace we care about.
-	var query string
-	if cxlPercentageDBColumn == "nop" {
-		query = fmt.Sprintf(`SELECT priority, cores, memory FROM "events-machine-id-%d" ORDER BY time`, traceMachineID)
-	} else {
-		query = fmt.Sprintf(`SELECT priority, cores, memory, cxl_mem_percent_%s FROM "events-machine-id-%d" ORDER BY time`,
-			cxlPercentageDBColumn, traceMachineID)
-	}
-	traceEvents, err := db.Query(query)
-	if err != nil {
-		return fmt.Errorf("failed to run query \"%s\" against trace DB %s: %w", query, traceDB, err)
-	}
-	defer func() {
-		if err := traceEvents.Close(); err != nil {
-			fmt.Fprintf(os.Stderr, "Failed to close trace DB %s rows: %v\n", traceDB, err)
+		if err != nil {
+			return fmt.Errorf("failed to scan sql row storing trace event: %w", err)
 		}
-	}()
 
-	// todo: more stuff.
-	// Now that we have the trace, we play it.
-	for e := traceEvents.Next() {
-		if err := rows.Scan(&priority, &cores, &memory, &cxlMemPercent); err != nil {
-            return fmt.Errorf("failed to scan row: %w", err)
-        }
-
-		// construct Pod
-		// create Pod or skip it
-		// poll Kubelet API to see if it's up and running => we need to connect to it.
-		// if up and running, probe memory manager files: update metrics.
-
+		if eventIsArrival(cores) {
+			handleArrival(priority, cores, memory, cxlMemPercent)
+		} else {
+			// process departure.
+		}
 	}
-	// Iterate -> parse into Pod
-
 
 	return nil
+}
+
+func handleArrival(priority int, normalizedCores, normalizedMemory float64, cxlMemPercent sql.NullInt32) {
+	requestedBytes := uint64(float64(hostTotalBytes) * normalizedMemory)
+	requestedMilliCores := uint64(float64(hostTotalMilliCores) * normalizedCores)
+
+	if requestedBytes > hostFreeBytes || requestedMilliCores > hostFreeMilliCores {
+		ignoredPodsCount++
+		return
+	}
+
+	// create file for it.
+	// write file for it.
+	// poll kubelet API for outcome -- need connection.
+	// If rejected - increase reject counter and done.
+	// If accepted.
+	// Add to active set.
+	// read kubelet files -- need connection.
+	// update resource availability.
+	// sample memory utilization => need file.
+}
+
+// In the trace, arrivals are described by resource requests >=0, departures as resource
+// requests < 0.
+func eventIsArrival(x float64) bool {
+	return x >= 0
 }
