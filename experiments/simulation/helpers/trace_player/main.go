@@ -220,11 +220,16 @@ func playTrace() error {
 	}()
 
 	// todo: more stuff.
-	// Now actually play the trace.
+	// Now that we have the trace, we play it.
 	for e := traceEvents.Next() {
 		if err := rows.Scan(&priority, &cores, &memory, &cxlMemPercent); err != nil {
             return fmt.Errorf("failed to scan row: %w", err)
         }
+
+		// construct Pod
+		// create Pod or skip it
+		// poll Kubelet API to see if it's up and running => we need to connect to it.
+		// if up and running, probe memory manager files: update metrics.
 
 	}
 	// Iterate -> parse into Pod
