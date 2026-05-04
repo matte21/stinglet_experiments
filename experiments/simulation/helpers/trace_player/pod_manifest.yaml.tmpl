@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: p-{{ .ID }}
+  annotations:
+    p-{{ .ID }}-fm/far-mem: "{{ .CXLMemRequest }}"
+    p-{{ .ID }}-fm/cpus-distribution-over-caches: "l1-share"
+spec:
+  containers:
+    - name: p-{{ .ID }}
+      image: localhost/mattedocker/nginx:1.14.2
+      resources:
+        requests:
+          cpu: "{{ .MilliCoresRequest }}m"
+          memory: "{{ .MemoryRequest }}"
+        limits:
+          cpu: "{{ .MilliCoresLimit }}m"
+          memory: "{{ .MemoryLimit }}"
+  restartPolicy: Never
