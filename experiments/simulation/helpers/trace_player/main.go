@@ -108,7 +108,7 @@ func main() {
 
 		lostSamplesCount := admittedPodsCount - admitTimeSamplesWrittenCount
 		if lostSamplesCount > 0 {
-			fmt.Fprintf(os.Stderr, "Warning: %d admit time samples out of %d could not be written to file %s",
+			fmt.Fprintf(os.Stderr, "Warning: %d admit time samples out of %d could not be written to file %s\n",
 				lostSamplesCount, admittedPodsCount, f.Name())
 		}
 	}()
@@ -218,7 +218,7 @@ func startKubeletAdmitTimeCollectionOrDie(stop <-chan time.Time, w io.Writer) {
 	go func() {
 		defer func() {
 			if err := jr.Close(); err != nil {
-				fmt.Fprintf(os.Stderr, "Failed to close systemd journal streamer (for collecting kubelet admission times): %v", err)
+				fmt.Fprintf(os.Stderr, "Failed to close systemd journal streamer (for collecting kubelet admission times): %v\n", err)
 			} else {
 				fmt.Println("Closed systemd journal streamer (for collecting kubelet admission times)")
 			}
@@ -413,7 +413,7 @@ func createPod(id uint32, cxlBytes, bytes, milliCores int64, isGuaranteed bool) 
 	}
 	defer func() {
 		if err := f.Close(); err != nil {
-			fmt.Fprintf(os.Stderr, "Failed to close pod manifest file %s: %s", podFileName, err)
+			fmt.Fprintf(os.Stderr, "Failed to close pod manifest file %s: %s\n", podFileName, err)
 		}
 	}()
 
