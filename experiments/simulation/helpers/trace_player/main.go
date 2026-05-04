@@ -67,8 +67,16 @@ func main() {
 		admitTimeRegexp:      regexp.MustCompile(`time="([^"]+)"`),
 	})
 
+	traceEvents, cleanupFunc, err := getTrace()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "Fatal: failed to get trace of VMs/pods arrivals and departures: %s.", err)
+		// return instead of os.Exit so that deferred functions still execute.
+		return
+	}
+	defer cleanupFunc()
+
 	// play trace
-	playTrace()
+	playTrace(traceEvents)
 }
 
 // "Die", i.e., exit immediately, if the passed flags are invalid.
@@ -187,6 +195,48 @@ func (h *kubeletLogLineHandler) Write(l []byte) (int, error) {
 		}
 	}
 	return len(l), nil
+}
+
+// Invoke cleanup only if err == nil (you can invoke it even if err != nil, but it's a nop). 
+func getTrace() (trace *sql.Rows, cleanup func(), err error) {
+	cleanup = func() {}
+
+	db, err := sql.Open("sqlite", traceDB)
+	if err != nil {
+		err = fmt.Errorf("failed to open trace DB %s: %w", traceDB, err)
+		return
+	}
+	defer func() {
+		if err != nil {
+			if err1 := db.Close(); err1 != nil {
+				fmt.Fprintf(os.Stderr, "Failed to close trace DB %s: %v\n", traceDB, err1)
+			}
+		}
+	}()
+
+	var query string
+	if cxlPercentageDBColumn == "nop" {
+		query = fmt.Sprintf(`SELECT priority, cores, memory FROM "events-machine-id-%d" ORDER BY time`, traceMachineID)
+	} else {
+		query = fmt.Sprintf(`SELECT priority, cores, memory, cxl_mem_percent_%s FROM "events-machine-id-%d" ORDER BY time`,
+			cxlPercentageDBColumn, traceMachineID)
+	}
+	trace, err = db.Query(query)
+	if err != nil {
+		err = fmt.Errorf("failed to run query \"%s\" against trace DB %s: %w", query, traceDB, err)
+		return
+	}
+
+	cleanup = func() {
+		if err := trace.Close(); err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to close trace DB %s rows: %v\n", traceDB, err)
+		}
+		if err := db.Close(); err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to close trace DB %s: %v\n", traceDB, err)
+		}
+	}
+
+	return 
 }
 
 func playTrace() error {
