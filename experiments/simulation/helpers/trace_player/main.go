@@ -25,6 +25,9 @@ import (
 
 // TODO: check that our logic on log filtering makes sense: we might see the admit time even on rejections!
 // TODO: check against kubelet's own data structures.
+// TODO: init total values.
+// TODO: handle main errors.
+// TODO: write utilization!
 
 const (
 	staticPodsDir = "/etc/kubernetes/manifests"
@@ -56,7 +59,6 @@ var (
 
 	// totals are used to scale the VM/pods resource requests (which are relative to the host's capacity).
 	// frees are used to check whether a VM/pod fits on the host where stinglet/kubelet is running.
-	// TODO: init total values.
 	hostTotalBytes      int64
 	hostFreeBytes       int64
 	hostTotalMilliCores int64
@@ -138,7 +140,6 @@ func main() {
 		Timeout: 5 * time.Second,
 	}
 
-	// todo: consider error handling within the trace.
 	playTrace(traceEvents)
 }
 
@@ -302,7 +303,6 @@ func getTrace() (trace *sql.Rows, cleanup func(), err error) {
 	return
 }
 
-// todo: consider error handling within the trace.
 func playTrace(traceEvents *sql.Rows) error {
 	// collectively this variables describe a trace event.
 	var vmID int64
@@ -311,8 +311,8 @@ func playTrace(traceEvents *sql.Rows) error {
 	var memory float64
 	var cxlMemPercent sql.NullInt32
 
+	var playedEventsCount uint32
 	var err error
-
 	for traceEvents.Next() {
 		// Read a single event, either a VM/Pod arrival/departure.
 		if cxlPercentageDBColumn == "nop" {
@@ -328,10 +328,18 @@ func playTrace(traceEvents *sql.Rows) error {
 			if err := handleArrival(vmID, priority, cores, memory, cxlMemPercent); err != nil {
 				return fmt.Errorf("failed to handle arrival of vmID %d: %w", vmID, err)
 			}
-		} else {
-			if err := handleDeparture(vmID); err != nil {
-				return fmt.Errorf("failed to handle departure of vmID %d: %w", vmID, err)
-			}
+			return nil
+		}
+
+		if err := handleDeparture(vmID); err != nil {
+			return fmt.Errorf("failed to handle departure of vmID %d: %w", vmID, err)
+		}
+
+		playedEventsCount++
+		// Empirically I've found 5k to be a good trade-off between observability and space
+		// efficiency.
+		if playedEventsCount%5000 == 0 {
+			fmt.Println("Played %d events in the trace", playedEventsCount)
 		}
 	}
 
@@ -560,5 +568,3 @@ func getPodsFromKubelet() (k8sapi.PodList, error) {
 
 	return allPods, nil
 }
-
-// todo: write utilization!
