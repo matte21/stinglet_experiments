@@ -80,6 +80,7 @@ type kubeletLogLineHandler struct {
 }
 
 type runningPod struct {
+	name                 string
 	manifestPath         string
 	requestedCXLMemBytes int64
 	requestedBytes       int64
@@ -391,6 +392,7 @@ func handleArrival(vmID, priority int64, normalizedCores, normalizedMemory float
 	// Record the pod in the trace table (i.e. its VM ID since the trace is about VMs), so
 	// that when we reach the departure in the trace we know which pod we have to delete.
 	vmIDToRunningPod[vmID] = &runningPod{
+		name:                 "p-" + strconv.Itoa(int(podsCount)),
 		manifestPath:         podFileName(podsCount),
 		requestedCXLMemBytes: requestedCXLBytes,
 		requestedBytes:       requestedBytes,
@@ -405,21 +407,42 @@ func handleArrival(vmID, priority int64, normalizedCores, normalizedMemory float
 }
 
 func handleDeparture(vmID int64) error {
-	pod, isRunning := vmIDToRunningPod[vmID]
+	departingPod, isRunning := vmIDToRunningPod[vmID]
 	if !isRunning {
 		return nil
 	}
 
-	if err := os.Remove(pod.manifestPath); err != nil {
-		return fmt.Errorf("failed to delete file %s on pod departure: %w", pod.manifestPath, err)
+	if err := os.Remove(departingPod.manifestPath); err != nil {
+		return fmt.Errorf("failed to delete file %s on pod departure: %w", departingPod.manifestPath, err)
 	}
 
+	// Wait for kubelet to delete the pod's state.
+	var i uint64
+
+outer_loop:
 	for {
+		allPods, err := getPodsFromKubelet()
+		if err != nil {
+			return err
+		}
 
+		for _, p := range allPods.Items {
+			if p.Name == departingPod.name {
+				time.Sleep(100 * time.Millisecond)
+				i++
+				if i%30 == 0 {
+					fmt.Printf("Waiting for kubelet to clean up pod %s's state...\n", departingPod.name)
+				}
+				goto outer_loop
+			}
+		}
+
+		// If we're here, kubelet cleared the state associated with the Pod.
+		break
 	}
 
-	hostFreeBytes += pod.requestedCXLMemBytes + pod.requestedBytes
-	hostFreeMilliCores += pod.requestedMilliCores
+	hostFreeBytes += departingPod.requestedCXLMemBytes + departingPod.requestedBytes
+	hostFreeMilliCores += departingPod.requestedMilliCores
 	delete(vmIDToRunningPod, vmID)
 
 	return nil
@@ -537,3 +560,5 @@ func getPodsFromKubelet() (k8sapi.PodList, error) {
 
 	return allPods, nil
 }
+
+// todo: write utilization!
