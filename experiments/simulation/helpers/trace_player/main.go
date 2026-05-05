@@ -114,6 +114,7 @@ func main() {
 	parseFlagsOrDie()
 
 	hostTotalBytes, hostTotalMilliCores = getHostTotalResourcesOrDie()
+	hostFreeBytes, hostFreeMilliCores = hostTotalBytes, hostTotalMilliCores
 
 	podManifestTemplate = template.Must(template.New("pod-manifest").Parse(podManifestTemplateStr))
 	podFields = make(map[string]any, 6)
