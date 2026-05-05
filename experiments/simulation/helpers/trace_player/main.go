@@ -26,7 +26,6 @@ import (
 
 // TODO: check against kubelet's own data structures.
 // TODO: write utilization!
-// TODO: happy path clean up
 // TODO: handle stinglet data structures!
 
 const (
@@ -401,7 +400,7 @@ func playTrace(traceEvents *sql.Rows) error {
 	var memory float64
 	var cxlMemPercent sql.NullInt32
 
-	var playedEventsCount uint32
+	var playedEventsCount uint64
 	var err error
 	for traceEvents.Next() {
 		// Read a single event, either a VM/Pod arrival/departure.
@@ -432,6 +431,9 @@ func playTrace(traceEvents *sql.Rows) error {
 			fmt.Printf("Played %d trace events\n", playedEventsCount)
 		}
 	}
+
+	// Some VMs might still be running after the trace end -> we clean them up.
+	deleteRemainingPods()
 
 	return nil
 }
@@ -544,6 +546,36 @@ outer_loop:
 	delete(vmIDToRunningPod, vmID)
 
 	return nil
+}
+
+func deleteRemainingPods() {
+	allRemoved := true
+	for _, pod := range vmIDToRunningPod {
+		if err := os.Remove(pod.manifestPath); err != nil {
+			allRemoved = false
+			fmt.Fprintf(os.Stderr, "Failed to remove pod manifest %s on happy path clean up: %v\n", pod.manifestPath, err)
+		}
+	}
+
+	var i uint64
+	for allRemoved {
+		pods, err := getPodsFromKubelet()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to check whether there are still running pods on happy path clean up: %v\n", err)
+			return
+		}
+		if len(pods.Items) == 0 {
+			return
+		}
+		time.Sleep(100 * time.Millisecond)
+		i++
+		if i%30 == 0 {
+			fmt.Printf("Waiting for all pods to be deleted by kubelet, %d still exist...\n", len(pods.Items))
+		}
+	}
+
+	// todo: wait for all containers to have been actually deleted by container runtime - right now we do it in the
+	// bash script calling this binary, which sucks.
 }
 
 // In the trace, arrivals are described by resource requests >=0, departures as resource
