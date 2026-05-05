@@ -3,3 +3,4 @@ cpuManagerPolicy: "static"
 memoryManagerPolicy: "Static"
 cpuManagerPolicyOptions:
   full-pcpus-only: "true"
+  strict-cpu-reservation: "true"

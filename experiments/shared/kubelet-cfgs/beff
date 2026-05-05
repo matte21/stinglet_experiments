@@ -1,3 +1,5 @@
 topologyManagerPolicy: "best-effort"
 cpuManagerPolicy: "static"
 memoryManagerPolicy: "Static"
+cpuManagerPolicyOptions:
+  strict-cpu-reservation: "true"

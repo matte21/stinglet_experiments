@@ -3,3 +3,4 @@ cpuManagerPolicy: "static"
 memoryManagerPolicy: "Static"
 cpuManagerPolicyOptions:
   prefer-align-cpus-by-uncorecache: "true"
+  strict-cpu-reservation: "true"

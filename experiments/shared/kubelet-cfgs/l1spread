@@ -1,3 +1,4 @@
 cpuManagerPolicy: "static"
 cpuManagerPolicyOptions:
   distribute-cpus-across-cores: "true"
+  strict-cpu-reservation: "true"
