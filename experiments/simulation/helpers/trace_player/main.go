@@ -26,12 +26,17 @@ import (
 // TODO: check against kubelet's own data structures.
 // TODO: init total values.
 // TODO: write utilization!
+// TODO: handle error and clean up from play trace.
+// TODO: handle stinglet data structures!
 
 const (
 	staticPodsDir = "/etc/kubernetes/manifests"
 	podsHealthAPI = "http://localhost:10255/pods"
 
 	unexpectedAdmissionErr = "UnexpectedAdmissionError"
+
+	memoryMgrStateFile = "/var/lib/kubelet/memory_manager_state"
+	cpuMgrStateFile    = "/var/lib/kubelet/cpu_manager_state"
 )
 
 var (
@@ -89,15 +94,26 @@ type runningPod struct {
 	isGuaranteed         bool
 }
 
+// The following three types are used to marshal kubelet's state files into Go structs.
+type MemoryManagerState struct {
+	MachineState map[string]NUMANodeState `json:"machineState"`
+}
+type NUMANodeState struct {
+	MemoryMap map[string]MemoryInfo `json:"memoryMap"`
+}
+type MemoryInfo struct {
+	Allocatable uint64 `json:"allocatable"`
+}
+
 func main() {
 	parseFlagsOrDie()
+
+	hostTotalBytes, hostTotalMilliCores = getHostTotalResourcesOrDie()
 
 	podManifestTemplate = template.Must(template.New("pod-manifest").Parse(podManifestTemplateStr))
 	podFields = make(map[string]any, 6)
 
 	vmIDToRunningPod = make(map[int64]*runningPod)
-
-	//if os.ReadFile()
 
 	f := openAndInitAdmitTimesFileOrDie()
 	defer func() {
@@ -205,6 +221,30 @@ func parseFlagsOrDie() {
 		flag.Usage()
 		os.Exit(1)
 	}
+}
+
+func getHostTotalResourcesOrDie() (memBytes, milliCores int64) {
+	f, err := os.ReadFile(memoryMgrStateFile)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Fatal: failed to read memory manager state file %s: %v\n", memoryMgrStateFile, err)
+		os.Exit(1)
+	}
+
+	var mms MemoryManagerState
+	if err := json.Unmarshal(f, &mms); err != nil {
+		fmt.Fprintf(os.Stderr, "Fatal: failed to parse memory manager state file %s: %v\n", memoryMgrStateFile, err)
+		os.Exit(1)
+	}
+
+	for _, numaNode := range mms.MachineState {
+		if memInfo, ok := numaNode.MemoryMap[string(k8sapi.ResourceMemory)]; ok {
+			memBytes += int64(memInfo.Allocatable)
+		}
+	}
+
+	// get CPU manager state.
+
+	return
 }
 
 func openAndInitAdmitTimesFileOrDie() *os.File {
