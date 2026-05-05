@@ -25,7 +25,6 @@ import (
 )
 
 // TODO: check against kubelet's own data structures.
-// TODO: change config to use strict CPU reservation.
 // TODO: write utilization!
 // TODO: handle error and clean up from play trace.
 // TODO: handle stinglet data structures!
@@ -136,7 +135,6 @@ func main() {
 			time.Sleep(100 * time.Millisecond)
 		}
 		close(stop)
-
 		lostSamplesCount := expectedSamplesCount - admitTimeSamplesWrittenCount
 		if lostSamplesCount > 0 {
 			fmt.Fprintf(os.Stderr, "Warning: %d admit time samples out of %d could not be written to file %s\n",
@@ -150,19 +148,18 @@ func main() {
 
 	// Load the table storing the VMs/pods arrivals and departures from the SQLite DB where it's
 	// stored.
-	traceEvents, cleanupFunc, err := getTrace()
+	traceEvents, closeTraceDBConnection, err := getTrace()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Fatal: failed to get trace of VMs/pods arrivals and departures: %s\n", err)
 		// return instead of os.Exit so that deferred functions still execute.
 		return
 	}
-	defer cleanupFunc()
+	defer closeTraceDBConnection()
 
 	kubeletClient = &http.Client{
 		Timeout: 5 * time.Second,
 	}
 
-	// todo: handle error and clean up from play trace.
 	playTrace(traceEvents)
 }
 
