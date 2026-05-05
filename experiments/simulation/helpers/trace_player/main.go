@@ -124,10 +124,10 @@ func main() {
 }
 
 func run() error {
-	f := openAndInitAdmitTimesFileOrDie()
+	admitTimesFile := openAndInitAdmitTimesFileOrDie()
 	defer func() {
-		if err := f.Close(); err != nil {
-			fmt.Fprintf(os.Stderr, "Failed to close kubelet admit times result file %s: %v\n", f.Name(), err)
+		if err := admitTimesFile.Close(); err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to close kubelet admit times result file %s: %v\n", admitTimesFile.Name(), err)
 		}
 	}()
 
@@ -148,12 +148,12 @@ func run() error {
 			lostSamplesCount := expectedSamplesCount - admitTimeSamplesWrittenCount
 			if lostSamplesCount > 0 {
 				fmt.Fprintf(os.Stderr, "Warning: %d admit time samples out of %d could not be written to file %s\n",
-					lostSamplesCount, expectedSamplesCount, f.Name())
+					lostSamplesCount, expectedSamplesCount, admitTimesFile.Name())
 			}
 		}
 	}()
 	startKubeletAdmitTimeCollectionOrDie(stop, &kubeletLogLineHandler{
-		admitTimeSamplesFile: f,
+		admitTimeSamplesFile: admitTimesFile,
 		admitTimeRegexp:      regexp.MustCompile(`time="([^"]+)"`),
 	})
 
