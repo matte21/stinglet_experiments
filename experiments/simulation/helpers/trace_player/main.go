@@ -21,10 +21,11 @@ import (
 	"github.com/coreos/go-systemd/v22/sdjournal"
 	k8sapi "k8s.io/api/core/v1"
 	k8sresources "k8s.io/apimachinery/pkg/api/resource"
+	"k8s.io/utils/cpuset"
 )
 
 // TODO: check against kubelet's own data structures.
-// TODO: init total values.
+// TODO: change config to use strict CPU reservation.
 // TODO: write utilization!
 // TODO: handle error and clean up from play trace.
 // TODO: handle stinglet data structures!
@@ -103,6 +104,9 @@ type NUMANodeState struct {
 }
 type MemoryInfo struct {
 	Allocatable uint64 `json:"allocatable"`
+}
+type CPUManagerState struct {
+	DefaultCPUSet string `json:"defaultCpuSet"`
 }
 
 func main() {
@@ -224,25 +228,40 @@ func parseFlagsOrDie() {
 }
 
 func getHostTotalResourcesOrDie() (memBytes, milliCores int64) {
+	// Compute total allocatable host memory from memory manager state file.
 	f, err := os.ReadFile(memoryMgrStateFile)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Fatal: failed to read memory manager state file %s: %v\n", memoryMgrStateFile, err)
 		os.Exit(1)
 	}
-
 	var mms MemoryManagerState
 	if err := json.Unmarshal(f, &mms); err != nil {
 		fmt.Fprintf(os.Stderr, "Fatal: failed to parse memory manager state file %s: %v\n", memoryMgrStateFile, err)
 		os.Exit(1)
 	}
-
 	for _, numaNode := range mms.MachineState {
 		if memInfo, ok := numaNode.MemoryMap[string(k8sapi.ResourceMemory)]; ok {
 			memBytes += int64(memInfo.Allocatable)
 		}
 	}
 
-	// get CPU manager state.
+	// Compute total allocatable CPUs from CPU manager state file.
+	f, err = os.ReadFile(cpuMgrStateFile)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Fatal: failed to read CPU manager state file %s: %v\n", cpuMgrStateFile, err)
+		os.Exit(1)
+	}
+	var cms CPUManagerState
+	if err := json.Unmarshal(f, &cms); err != nil {
+		fmt.Fprintf(os.Stderr, "Fatal: failed to parse CPU manager state file %s: %v\n", cpuMgrStateFile, err)
+		os.Exit(1)
+	}
+	cst, err := cpuset.Parse(cms.DefaultCPUSet)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Fatal: failed to parse default CPUset %s: %v\n", cms.DefaultCPUSet, err)
+		os.Exit(1)
+	}
+	milliCores = 1000 * int64(cst.Size())
 
 	return
 }
