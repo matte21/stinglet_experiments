@@ -50,7 +50,7 @@ for mid in ${machine_ids//,/ }; do
         # play_trace cleans up the pods but exits as soon as kubelet cleared their state. But the
         # containers state might still exist, because the container runtime cleans them up
         # asynchronously. Before we play the next trace, makes sure that the container runtime
-        # deleted everything.  
+        # deleted everything.
         while [[ $(crictl pods -q) != "" || $(crictl ps -q) != "" ]]; do
             echo "Waiting for all pods to have been permanently deleted..."
             sleep 5
