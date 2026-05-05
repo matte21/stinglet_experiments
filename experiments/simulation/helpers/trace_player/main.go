@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"database/sql"
 	_ "embed"
@@ -124,6 +125,12 @@ func main() {
 }
 
 func run() error {
+	memUtilFile, flushAndCloseFile, err := openAndInitMemUtilFile()
+	if err != nil {
+		return err
+	}
+	defer flushAndCloseFile()
+
 	admitTimesFile := openAndInitAdmitTimesFileOrDie()
 	defer func() {
 		if err := admitTimesFile.Close(); err != nil {
@@ -279,8 +286,30 @@ func getHostTotalResourcesOrDie() (memBytes, milliCores int64) {
 	return
 }
 
+func openAndInitMemUtilFile() (*bufio.Writer, func(), error) {
+	path := filepath.Join(resultsDir, resultsFilePrefix+"_mem_util.csv")
+	f, err := os.Create(path)
+	if err != nil {
+		return nil, func() {}, fmt.Errorf("failed to create memory utilization file %s: %w", path, err)
+	}
+	bw := bufio.NewWriter(f)
+
+	// todo: actual write the file.
+
+	cleanup := func() {
+		if err := bw.Flush(); err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to flush memory utilization samples file %s: %v\n", path, err)
+		}
+		if err := f.Close(); err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to close memory utilization samples file %s: %v\n", path, err)
+		}
+	}
+
+	return bw, cleanup, nil
+}
+
 func openAndInitAdmitTimesFileOrDie() *os.File {
-	path := filepath.Join(resultsDir, resultsFilePrefix+"admit_times.csv")
+	path := filepath.Join(resultsDir, resultsFilePrefix+"_admit_times.csv")
 	f, err := os.Create(path)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Fatal: failed to create admit times file %s: %v\n", path, err)
