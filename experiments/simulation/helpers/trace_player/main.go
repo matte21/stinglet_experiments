@@ -26,7 +26,7 @@ import (
 
 // TODO: check against kubelet's own data structures.
 // TODO: write utilization!
-// TODO: handle error and clean up from play trace.
+// TODO: happy path clean up
 // TODO: handle stinglet data structures!
 
 const (
@@ -118,6 +118,13 @@ func main() {
 
 	vmIDToRunningPod = make(map[int64]*runningPod)
 
+	if err := run(); err != nil {
+		fmt.Fprintf(os.Stderr, "Fatal: %v\n", err)
+		os.Exit(1)
+	}
+}
+
+func run() error {
 	f := openAndInitAdmitTimesFileOrDie()
 	defer func() {
 		if err := f.Close(); err != nil {
@@ -126,19 +133,24 @@ func main() {
 	}()
 
 	// Start collecting pod admission times from kubelet logs, in the background.
+	waitForAllSamples := true
 	stop := make(chan time.Time)
 	defer func() {
 		expectedSamplesCount := admittedPodsCount + rejectedPodsCount
-		// Stop the samples collector only after the samples for all pods have been collected.
-		for admitTimeSamplesCount.Load() < expectedSamplesCount {
-			// Give kubelet some time to emit log lines with the admit times of the last pods.
-			time.Sleep(100 * time.Millisecond)
+		if waitForAllSamples {
+			// Stop the samples collector only after the samples for all pods have been collected.
+			for admitTimeSamplesCount.Load() < expectedSamplesCount {
+				// Give kubelet some time to emit log lines with the admit times of the last pods.
+				time.Sleep(100 * time.Millisecond)
+			}
 		}
-		close(stop)
-		lostSamplesCount := expectedSamplesCount - admitTimeSamplesWrittenCount
-		if lostSamplesCount > 0 {
-			fmt.Fprintf(os.Stderr, "Warning: %d admit time samples out of %d could not be written to file %s\n",
-				lostSamplesCount, expectedSamplesCount, f.Name())
+		stop <- time.Time{}
+		if waitForAllSamples {
+			lostSamplesCount := expectedSamplesCount - admitTimeSamplesWrittenCount
+			if lostSamplesCount > 0 {
+				fmt.Fprintf(os.Stderr, "Warning: %d admit time samples out of %d could not be written to file %s\n",
+					lostSamplesCount, expectedSamplesCount, f.Name())
+			}
 		}
 	}()
 	startKubeletAdmitTimeCollectionOrDie(stop, &kubeletLogLineHandler{
@@ -150,9 +162,8 @@ func main() {
 	// stored.
 	traceEvents, closeTraceDBConnection, err := getTrace()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Fatal: failed to get trace of VMs/pods arrivals and departures: %s\n", err)
 		// return instead of os.Exit so that deferred functions still execute.
-		return
+		return fmt.Errorf("failed to get trace of VMs/pods arrivals and departures: %w; not cleaning up pods so you can debug better.", err)
 	}
 	defer closeTraceDBConnection()
 
@@ -160,7 +171,13 @@ func main() {
 		Timeout: 5 * time.Second,
 	}
 
-	playTrace(traceEvents)
+	if err := playTrace(traceEvents); err != nil {
+		waitForAllSamples = false
+		// return instead of os.Exit so that deferred functions still execute.
+		return fmt.Errorf("failed to play trace: %w; not cleaning up pods so you can debug better.", err)
+	}
+
+	return nil
 }
 
 // "Die", i.e., exit immediately, if the passed flags are invalid.
