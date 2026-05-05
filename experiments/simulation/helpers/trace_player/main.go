@@ -26,7 +26,6 @@ import (
 )
 
 // TODO: check against kubelet's own data structures.
-// TODO: write summary stats
 // TODO: handle stinglet data structures!
 
 const (
