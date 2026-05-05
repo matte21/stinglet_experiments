@@ -292,17 +292,31 @@ func getHostTotalResourcesOrDie() (memBytes, milliCores int64) {
 	return
 }
 
-func openAndInitMemUtilFile() (*bufio.Writer, func(), error) {
+func openAndInitMemUtilFile() (bw *bufio.Writer, cleanup func(), err error) {
 	path := filepath.Join(resultsDir, resultsFilePrefix+"_mem_util.csv")
 	f, err := os.Create(path)
 	if err != nil {
-		return nil, func() {}, fmt.Errorf("failed to create memory utilization file %s: %w", path, err)
+		err = fmt.Errorf("failed to create memory utilization file %s: %w", path, err)
+		return
 	}
-	bw := bufio.NewWriter(f)
+	defer func() {
+		if err == nil {
+			return
+		}
+		if closeErr := f.Close(); closeErr != nil {
+			fmt.Fprintf(os.Stderr, "Failed to close memory utilization samples file %s: %v\n", path, closeErr)
+		}
+	}()
 
-	// todo: actual write the file.
+	bw = bufio.NewWriter(f)
+	fmt.Fprintf(bw, ",tot mem GiB,%g,\n", float64(hostTotalBytes)/(1<<30))
+	fmt.Fprintln(bw, ",used GiB,used percent,")
+	if err = bw.Flush(); err != nil {
+		err = fmt.Errorf("failed to write header to memory utilization file %s: %w", path, err)
+		return
+	}
 
-	cleanup := func() {
+	cleanup = func() {
 		if err := bw.Flush(); err != nil {
 			fmt.Fprintf(os.Stderr, "Failed to flush memory utilization samples file %s: %v\n", path, err)
 		}
@@ -311,7 +325,7 @@ func openAndInitMemUtilFile() (*bufio.Writer, func(), error) {
 		}
 	}
 
-	return bw, cleanup, nil
+	return
 }
 
 func openAndInitAdmitTimesFile() (f *os.File, err error) {
