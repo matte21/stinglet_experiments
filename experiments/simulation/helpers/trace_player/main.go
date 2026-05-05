@@ -23,10 +23,8 @@ import (
 	k8sresources "k8s.io/apimachinery/pkg/api/resource"
 )
 
-// TODO: check that our logic on log filtering makes sense: we might see the admit time even on rejections!
 // TODO: check against kubelet's own data structures.
 // TODO: init total values.
-// TODO: handle main errors.
 // TODO: write utilization!
 
 const (
@@ -108,17 +106,18 @@ func main() {
 	// Start collecting pod admission times from kubelet logs, in the background.
 	stop := make(chan time.Time)
 	defer func() {
+		expectedSamplesCount := admittedPodsCount + rejectedPodsCount
 		// Stop the samples collector only after the samples for all pods have been collected.
-		for admitTimeSamplesCount.Load() < admittedPodsCount {
+		for admitTimeSamplesCount.Load() < expectedSamplesCount {
 			// Give kubelet some time to emit log lines with the admit times of the last pods.
 			time.Sleep(100 * time.Millisecond)
 		}
 		close(stop)
 
-		lostSamplesCount := admittedPodsCount - admitTimeSamplesWrittenCount
+		lostSamplesCount := expectedSamplesCount - admitTimeSamplesWrittenCount
 		if lostSamplesCount > 0 {
 			fmt.Fprintf(os.Stderr, "Warning: %d admit time samples out of %d could not be written to file %s\n",
-				lostSamplesCount, admittedPodsCount, f.Name())
+				lostSamplesCount, expectedSamplesCount, f.Name())
 		}
 	}()
 	startKubeletAdmitTimeCollectionOrDie(stop, &kubeletLogLineHandler{
@@ -140,6 +139,7 @@ func main() {
 		Timeout: 5 * time.Second,
 	}
 
+	// todo: handle error and clean up from play trace.
 	playTrace(traceEvents)
 }
 
@@ -304,7 +304,7 @@ func getTrace() (trace *sql.Rows, cleanup func(), err error) {
 }
 
 func playTrace(traceEvents *sql.Rows) error {
-	// collectively this variables describe a trace event.
+	// Collectively these variables describe a trace event.
 	var vmID int64
 	var priority int64
 	var cores float64
@@ -328,18 +328,17 @@ func playTrace(traceEvents *sql.Rows) error {
 			if err := handleArrival(vmID, priority, cores, memory, cxlMemPercent); err != nil {
 				return fmt.Errorf("failed to handle arrival of vmID %d: %w", vmID, err)
 			}
-			return nil
-		}
-
-		if err := handleDeparture(vmID); err != nil {
-			return fmt.Errorf("failed to handle departure of vmID %d: %w", vmID, err)
+		} else {
+			if err := handleDeparture(vmID); err != nil {
+				return fmt.Errorf("failed to handle departure of vmID %d: %w", vmID, err)
+			}
 		}
 
 		playedEventsCount++
 		// Empirically I've found 5k to be a good trade-off between observability and space
 		// efficiency.
 		if playedEventsCount%5000 == 0 {
-			fmt.Println("Played %d events in the trace", playedEventsCount)
+			fmt.Printf("Played %d trace events\n", playedEventsCount)
 		}
 	}
 
@@ -369,7 +368,7 @@ func handleArrival(vmID, priority int64, normalizedCores, normalizedMemory float
 
 	// If the pod doesn't fit on our reference host we ignore it - it's as if the cluster scheduler
 	// scheduled it to a different host.
-	if requestedBytes > hostFreeBytes || requestedMilliCores > hostFreeMilliCores {
+	if requestedBytes+requestedCXLBytes > hostFreeBytes || requestedMilliCores > hostFreeMilliCores {
 		ignoredPodsCount++
 		return nil
 	}
@@ -459,7 +458,7 @@ outer_loop:
 // In the trace, arrivals are described by resource requests >=0, departures as resource
 // requests < 0.
 func eventIsArrival(resourceRequest float64) bool {
-	return resourceRequest >= 0
+	return resourceRequest > 0
 }
 
 func podIsGuaranteed(priority int64) bool {
