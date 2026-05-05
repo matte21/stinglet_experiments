@@ -142,8 +142,15 @@ func run() error {
 	}()
 
 	// Start collecting pod admission times from kubelet logs, in the background.
-	waitForAllSamples := true
 	stop := make(chan time.Time)
+	err = startKubeletAdmitTimeCollection(stop, &kubeletLogLineHandler{
+		admitTimeSamplesFile: admitTimesFile,
+		admitTimeRegexp:      regexp.MustCompile(`time="([^"]+)"`),
+	})
+	if err != nil {
+		return err
+	}
+	waitForAllSamples := true
 	defer func() {
 		expectedSamplesCount := admittedPodsCount + rejectedPodsCount
 		if waitForAllSamples {
@@ -162,10 +169,6 @@ func run() error {
 			}
 		}
 	}()
-	startKubeletAdmitTimeCollectionOrDie(stop, &kubeletLogLineHandler{
-		admitTimeSamplesFile: admitTimesFile,
-		admitTimeRegexp:      regexp.MustCompile(`time="([^"]+)"`),
-	})
 
 	// Load the table storing the VMs/pods arrivals and departures from the SQLite DB where it's
 	// stored.
@@ -315,7 +318,7 @@ func openAndInitAdmitTimesFile() (f *os.File, err error) {
 	path := filepath.Join(resultsDir, resultsFilePrefix+"_admit_times.csv")
 	f, err = os.Create(path)
 	if err != nil {
-		err = fmt.Errorf("failed to create admit times file %s: %w\n", path, err)
+		err = fmt.Errorf("failed to create admit times file %s: %w", path, err)
 		return
 	}
 	defer func() {
@@ -328,14 +331,14 @@ func openAndInitAdmitTimesFile() (f *os.File, err error) {
 	}()
 
 	if _, err = fmt.Fprintln(f, ",admit time usecs,,"); err != nil {
-		err = fmt.Errorf("failed to write header to admit times file %s: %w\n", path, err)
+		err = fmt.Errorf("failed to write header to admit times file %s: %w", path, err)
 		return
 	}
 
 	return
 }
 
-func startKubeletAdmitTimeCollectionOrDie(stop <-chan time.Time, w io.Writer) {
+func startKubeletAdmitTimeCollection(stop <-chan time.Time, w io.Writer) error {
 	cfg := sdjournal.JournalReaderConfig{
 		Matches: []sdjournal.Match{
 			{
@@ -349,22 +352,21 @@ func startKubeletAdmitTimeCollectionOrDie(stop <-chan time.Time, w io.Writer) {
 
 	jr, err := sdjournal.NewJournalReader(cfg)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Fatal: failed to open systemd journal to collect kubelet admission times: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("failed to open systemd journal to collect kubelet admission times: %w", err)
 	}
 
 	go func() {
 		defer func() {
 			if err := jr.Close(); err != nil {
 				fmt.Fprintf(os.Stderr, "Failed to close systemd journal streamer (for collecting kubelet admission times): %v\n", err)
-			} else {
-				fmt.Println("Closed systemd journal streamer (for collecting kubelet admission times)")
 			}
 		}()
 		if err := jr.Follow(stop, w); err != nil && err != sdjournal.ErrExpired {
 			fmt.Fprintf(os.Stderr, "Error while following systemd journal collecting kubelet admission times: %v\n", err)
 		}
 	}()
+
+	return nil
 }
 
 // example kubelet log line that this function matches and parses:
