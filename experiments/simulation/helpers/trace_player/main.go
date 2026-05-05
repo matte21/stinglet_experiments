@@ -192,7 +192,7 @@ func run() error {
 		return fmt.Errorf("failed to play trace: %w; not cleaning up pods so you can debug better.", err)
 	}
 
-	return nil
+	return writeSummary()
 }
 
 // "Die", i.e., exit immediately, if the passed flags are invalid.
@@ -407,6 +407,41 @@ func (h *kubeletLogLineHandler) Write(l []byte) (int, error) {
 		}
 	}
 	return len(l), nil
+}
+
+func writeSummary() error {
+	path := filepath.Join(resultsDir, resultsFilePrefix+"_summary.csv")
+	f, err := os.Create(path)
+	if err != nil {
+		return fmt.Errorf("failed to create summary file %s: %w", path, err)
+	}
+	defer func() {
+		if err := f.Close(); err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to close summary file %s: %v\n", path, err)
+		}
+	}()
+
+	hostTotalGiB := float64(hostTotalBytes) / (1 << 30)
+	avgMemUtilPercent := 100 * avgMemUtilGiB / hostTotalGiB
+
+	_, err = fmt.Fprintf(f,
+		"podsCount,%d,\n"+
+			"ignoredPodsCount,%d,\n"+
+			"rejectedPodsCount,%d,\n"+
+			"admittedPodsCount,%d,\n"+
+			"podsThatUseCXLCount,%d,\n"+
+			"admittedPodsThatUseCXLCount,%d,\n"+
+			"hostTotalGiB,%g,\n"+
+			"avgMemUtilGiB,%g,\n"+
+			"avgMemUtilPercent,%g,\n",
+		podsCount, ignoredPodsCount, rejectedPodsCount, admittedPodsCount,
+		podsThatUseCXLCount, admittedPodsThatUseCXLCount,
+		hostTotalGiB, avgMemUtilGiB, avgMemUtilPercent)
+	if err != nil {
+		return fmt.Errorf("failed to write summary file %s: %w", path, err)
+	}
+
+	return nil
 }
 
 // Invoke cleanup only if err == nil (you can invoke it even if err != nil, but it's a nop).
