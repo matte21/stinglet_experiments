@@ -26,7 +26,7 @@ import (
 )
 
 // TODO: check against kubelet's own data structures.
-// TODO: write utilization!
+// TODO: write summary stats
 // TODO: handle stinglet data structures!
 
 const (
@@ -67,6 +67,8 @@ var (
 	hostFreeBytes       int64
 	hostTotalMilliCores int64
 	hostFreeMilliCores  int64
+	avgMemUtilGiB       float64
+	memUtilSamples      uint64
 
 	//go:embed pod_manifest.yaml.tmpl
 	podManifestTemplateStr string
@@ -616,6 +618,8 @@ outer_loop:
 func sampleMemUtil(f *bufio.Writer) {
 	curMemUsedGiB := float64(hostTotalBytes-hostFreeBytes) / (1 << 30)
 	fmt.Fprintf(f, ",%g,%g,\n", curMemUsedGiB, 100*curMemUsedGiB/float64(hostTotalBytes))
+	memUtilSamples++
+	avgMemUtilGiB += (curMemUsedGiB - avgMemUtilGiB) / float64(memUtilSamples)
 }
 
 func deleteRemainingPods() {
