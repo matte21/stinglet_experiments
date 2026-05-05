@@ -40,6 +40,7 @@ var (
 	resultsFilePrefix     string
 	traceDB               string
 	traceMachineID        int
+	kubeletType           string
 	cxlPercentageDBColumn string
 
 	// Thes variables track some statistics we care about, either for the paper results, or
@@ -96,6 +97,8 @@ func main() {
 
 	vmIDToRunningPod = make(map[int64]*runningPod)
 
+	//if os.ReadFile()
+
 	f := openAndInitAdmitTimesFileOrDie()
 	defer func() {
 		if err := f.Close(); err != nil {
@@ -149,6 +152,7 @@ func parseFlagsOrDie() {
 	flag.StringVar(&resultsFilePrefix, "results-file-prefix", "", "Prefix for result files names")
 	flag.StringVar(&traceDB, "trace-db", "", "Path to the SQLite trace database file")
 	flag.IntVar(&traceMachineID, "trace-machine-id", -1, "Azure machine type ID the resource requests in the trace are relative to")
+	flag.StringVar(&kubeletType, "kubelet-type", "", "either \"standard\" or \"stinglet\"")
 	flag.StringVar(&cxlPercentageDBColumn, "cxl-percentage-db-column", "", "Name of the column in the trace table that stores the percentage of working set memory that the VM wants on CXL")
 
 	flag.Parse()
@@ -156,6 +160,7 @@ func parseFlagsOrDie() {
 	resultsDir = strings.TrimSpace(resultsDir)
 	resultsFilePrefix = strings.TrimSpace(resultsFilePrefix)
 	traceDB = strings.TrimSpace(traceDB)
+	kubeletType = strings.ToLower(strings.TrimSpace(kubeletType))
 	cxlPercentageDBColumn = strings.ToLower(strings.TrimSpace(cxlPercentageDBColumn))
 
 	if resultsDir == "" {
@@ -178,6 +183,18 @@ func parseFlagsOrDie() {
 		flag.Usage()
 		os.Exit(1)
 	}
+
+	if kubeletType == "" {
+		fmt.Fprintln(os.Stderr, "Fatal: --kubelet-type is required, and must be one of standard, stinglet.")
+		flag.Usage()
+		os.Exit(1)
+	}
+	if kubeletType != "standard" && kubeletType != "stinglet" {
+		fmt.Fprintf(os.Stderr, "Fatal: --kubelet-type has value %s; must be one of standard, stinglet.\n", kubeletType)
+		flag.Usage()
+		os.Exit(1)
+	}
+
 	if cxlPercentageDBColumn == "" {
 		fmt.Fprintln(os.Stderr, "Fatal: --cxl-percentage-db-column is required, and must be one of greensku, pond, and nop.")
 		flag.Usage()
@@ -335,6 +352,7 @@ func playTrace(traceEvents *sql.Rows) error {
 		}
 
 		playedEventsCount++
+
 		// Empirically I've found 5k to be a good trade-off between observability and space
 		// efficiency.
 		if playedEventsCount%5000 == 0 {
