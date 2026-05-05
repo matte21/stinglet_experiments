@@ -131,7 +131,10 @@ func run() error {
 	}
 	defer flushAndCloseFile()
 
-	admitTimesFile := openAndInitAdmitTimesFileOrDie()
+	admitTimesFile, err := openAndInitAdmitTimesFile()
+	if err != nil {
+		return err
+	}
 	defer func() {
 		if err := admitTimesFile.Close(); err != nil {
 			fmt.Fprintf(os.Stderr, "Failed to close kubelet admit times result file %s: %v\n", admitTimesFile.Name(), err)
@@ -308,20 +311,28 @@ func openAndInitMemUtilFile() (*bufio.Writer, func(), error) {
 	return bw, cleanup, nil
 }
 
-func openAndInitAdmitTimesFileOrDie() *os.File {
+func openAndInitAdmitTimesFile() (f *os.File, err error) {
 	path := filepath.Join(resultsDir, resultsFilePrefix+"_admit_times.csv")
-	f, err := os.Create(path)
+	f, err = os.Create(path)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Fatal: failed to create admit times file %s: %v\n", path, err)
-		os.Exit(1)
+		err = fmt.Errorf("failed to create admit times file %s: %w\n", path, err)
+		return
+	}
+	defer func() {
+		if err == nil {
+			return
+		}
+		if closeErr := f.Close(); closeErr != nil {
+			fmt.Fprintf(os.Stderr, "Failed to close kubelet admit times result file %s: %v\n", path, closeErr)
+		}
+	}()
+
+	if _, err = fmt.Fprintln(f, ",admit time usecs,,"); err != nil {
+		err = fmt.Errorf("failed to write header to admit times file %s: %w\n", path, err)
+		return
 	}
 
-	if _, err := fmt.Fprintln(f, ",admit time usecs,,"); err != nil {
-		fmt.Fprintf(os.Stderr, "Fatal: failed to write header to admit times file %s: %v\n", path, err)
-		os.Exit(1)
-	}
-
-	return f
+	return
 }
 
 func startKubeletAdmitTimeCollectionOrDie(stop <-chan time.Time, w io.Writer) {
