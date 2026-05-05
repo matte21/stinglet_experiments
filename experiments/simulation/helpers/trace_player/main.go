@@ -183,7 +183,7 @@ func run() error {
 		Timeout: 5 * time.Second,
 	}
 
-	if err := playTrace(traceEvents); err != nil {
+	if err := playTrace(traceEvents, memUtilFile); err != nil {
 		waitForAllSamples = false
 		// return instead of os.Exit so that deferred functions still execute.
 		return fmt.Errorf("failed to play trace: %w; not cleaning up pods so you can debug better.", err)
@@ -448,7 +448,7 @@ func getTrace() (trace *sql.Rows, cleanup func(), err error) {
 	return
 }
 
-func playTrace(traceEvents *sql.Rows) error {
+func playTrace(traceEvents *sql.Rows, memUtilFile *bufio.Writer) error {
 	// Collectively these variables describe a trace event.
 	var vmID int64
 	var priority int64
@@ -470,11 +470,11 @@ func playTrace(traceEvents *sql.Rows) error {
 		}
 
 		if eventIsArrival(cores) {
-			if err := handleArrival(vmID, priority, cores, memory, cxlMemPercent); err != nil {
+			if err := handleArrival(vmID, priority, cores, memory, cxlMemPercent, memUtilFile); err != nil {
 				return fmt.Errorf("failed to handle arrival of vmID %d: %w", vmID, err)
 			}
 		} else {
-			if err := handleDeparture(vmID); err != nil {
+			if err := handleDeparture(vmID, memUtilFile); err != nil {
 				return fmt.Errorf("failed to handle departure of vmID %d: %w", vmID, err)
 			}
 		}
@@ -485,6 +485,9 @@ func playTrace(traceEvents *sql.Rows) error {
 		// efficiency.
 		if playedEventsCount%5000 == 0 {
 			fmt.Printf("Played %d trace events\n", playedEventsCount)
+			if err := memUtilFile.Flush(); err != nil {
+				return fmt.Errorf("flushing memory utilization file failed: %w", err)
+			}
 		}
 	}
 
@@ -494,7 +497,9 @@ func playTrace(traceEvents *sql.Rows) error {
 	return nil
 }
 
-func handleArrival(vmID, priority int64, normalizedCores, normalizedMemory float64, cxlMemPercent sql.NullInt32) error {
+func handleArrival(vmID, priority int64, normalizedCores, normalizedMemory float64,
+	cxlMemPercent sql.NullInt32, memUtilFile *bufio.Writer) error {
+
 	podsCount++
 
 	requestedBytes := int64(float64(hostTotalBytes) * normalizedMemory)
@@ -559,10 +564,12 @@ func handleArrival(vmID, priority int64, normalizedCores, normalizedMemory float
 	hostFreeBytes -= requestedCXLBytes + requestedBytes
 	hostFreeMilliCores -= requestedMilliCores
 
+	sampleMemUtil(memUtilFile)
+
 	return nil
 }
 
-func handleDeparture(vmID int64) error {
+func handleDeparture(vmID int64, memUtilFile *bufio.Writer) error {
 	departingPod, isRunning := vmIDToRunningPod[vmID]
 	if !isRunning {
 		return nil
@@ -601,7 +608,14 @@ outer_loop:
 	hostFreeMilliCores += departingPod.requestedMilliCores
 	delete(vmIDToRunningPod, vmID)
 
+	sampleMemUtil(memUtilFile)
+
 	return nil
+}
+
+func sampleMemUtil(f *bufio.Writer) {
+	curMemUsedGiB := float64(hostTotalBytes-hostFreeBytes) / (1 << 30)
+	fmt.Fprintf(f, ",%g,%g,\n", curMemUsedGiB, 100*curMemUsedGiB/float64(hostTotalBytes))
 }
 
 func deleteRemainingPods() {
