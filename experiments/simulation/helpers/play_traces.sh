@@ -12,7 +12,7 @@ if [[ "$#" -ne 5 ]]; then
     exit 1
 fi
 readonly machine_ids="$1"
-readonly cxl_vms_percentages_names="${2:-nop}"
+readonly cxl_percentage_db_column="${2:-nop}"
 readonly results_dir="$3"
 readonly kubelet_bin="$4"
 readonly kubelet_cfg="$5"
@@ -26,7 +26,13 @@ for mid in ${machine_ids//,/ }; do
 done
 
 for mid in ${machine_ids//,/ }; do
-    for cvpn in ${cxl_vms_percentages_names//,/ }; do
+    for cpdc in ${cxl_percentage_db_column//,/ }; do
+        kubelet_type="standard"
+        if [[ "$kubelet_bin" == "stinglet" ]]; then
+            kubelet_type="stinglet"
+        fi
+        log_file="$results_dir/${kubelet_bin}_${kubelet_cfg}.log"
+
         # Launch the binary that plays the trace. It sucks to use a separate binary
         # (and written in a language other than bash!) rather than playing the trace directly here.
         # But playing the traces directly in bash is too slow. i.e. just iterating over all trace
@@ -34,5 +40,21 @@ for mid in ${machine_ids//,/ }; do
         # Considering all traces and baselines we want to play, that would have been a 30 hours
         # overhead to play all traces. With this bibnary (written in Go), the per-trace overhead is
         # is only 30 secs, and the cumulative overhead across all traces is ~2 hours.
+        ./play_trace --trace-db "$trace_db_file" \
+            --trace-machine-id "$mid" \
+            --cxl-percentage-db-column "$cpdc" \
+            --results-dir "$results_dir" \
+            --results-file-prefix "${kubelet_bin}_${kubelet_cfg}_${mid}" \
+            --kubelet-type "$kubelet_type" > "$log_file" 2>&1
+
+        # play_trace cleans up the pods but exits as soon as kubelet cleared their state. But the
+        # containers state might still exist, because the container runtime cleans them up
+        # asynchronously. Before we play the next trace, makes sure that the container runtime
+        # deleted everything.  
+        while [[ $(crictl pods -q) != "" || $(crictl ps -q) != "" ]]; do
+            echo "Waiting for all pods to have been permanently deleted..."
+            sleep 5
+        done
+        echo All pods and containers have been permanently deleted.
     done
 done
