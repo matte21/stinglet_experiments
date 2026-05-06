@@ -111,7 +111,7 @@ EOF
 done
 
 echo
-echo "trace database is in file $trace_db_path with size $(du -sh "$trace_db_path" | cut -f1)"
+echo "trace database is in file $(realpath "$trace_db_path") with size $(du -sh "$trace_db_path" | cut -f1)"
 
 # machine type = physical server
 # vm type = pre-configured VM sizes.
