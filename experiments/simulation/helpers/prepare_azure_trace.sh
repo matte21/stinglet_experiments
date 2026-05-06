@@ -18,7 +18,7 @@ else
     curl "$trace_url" -o "$trace_zip"
 fi
 if [[ ! -f "$trace_db_path" ]]; then
-    unzip "$trace_zip" -d ..
+    unzip "$trace_zip" -d "$(dirname $trace_db_path)"
     rm "$trace_zip"
 fi
 
