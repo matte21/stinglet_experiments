@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"database/sql"
 	_ "embed"
-	_ "modernc.org/sqlite"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -19,6 +18,8 @@ import (
 	"sync/atomic"
 	"text/template"
 	"time"
+
+	_ "modernc.org/sqlite"
 
 	"github.com/coreos/go-systemd/v22/sdjournal"
 	k8sapi "k8s.io/api/core/v1"
@@ -372,7 +373,7 @@ func startKubeletAdmitTimeCollection(stop <-chan time.Time, w io.Writer) error {
 			},
 		},
 		// Only get new logs from now on.
-		Since: time.Duration(0),
+		Since: time.Nanosecond,
 	}
 
 	jr, err := sdjournal.NewJournalReader(cfg)
