@@ -8,7 +8,7 @@ metadata:
 spec:
   containers:
     - name: p-{{ .ID }}
-      image: localhost/mattedocker/nginx:1.14.2
+      image: registry.k8s.io/pause:3.10
       resources:
         requests:
           cpu: "{{ .MilliCoresRequest }}m"

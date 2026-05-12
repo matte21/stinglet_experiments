@@ -19,7 +19,7 @@ readonly kubelet_cfg="$5"
 
 # Make sure all tables for the traces we have to play do exist.
 for mid in ${machine_ids//,/ }; do
-    if ! sqlite3 "../$trace_db_file" ".tables" | grep -qw "events-machine-id-${mid}"; then
+    if ! sqlite3 "$trace_db_file" ".tables" | grep -qw "events-machine-id-${mid}"; then
         echo "Fatal: table events-machine-id-${mid} for machine ID $mid requested in experiment doesn't exist."
         exit 1
     fi
@@ -40,7 +40,7 @@ for mid in ${machine_ids//,/ }; do
         # Considering all traces and baselines we want to play, that would have been a 30 hours
         # overhead to play all traces. With this bibnary (written in Go), the per-trace overhead is
         # is only 30 secs, and the cumulative overhead across all traces is ~2 hours.
-        ./play_trace --trace-db "$trace_db_file" \
+        sudo helpers/play_trace --trace-db "$trace_db_file" \
             --trace-machine-id "$mid" \
             --cxl-percentage-db-column "$cpdc" \
             --results-dir "$results_dir" \
@@ -51,7 +51,7 @@ for mid in ${machine_ids//,/ }; do
         # containers state might still exist, because the container runtime cleans them up
         # asynchronously. Before we play the next trace, makes sure that the container runtime
         # deleted everything.
-        while [[ $(crictl pods -q) != "" || $(crictl ps -q) != "" ]]; do
+        while [[ $(sudo crictl pods -q) != "" || $(sudo crictl ps -q) != "" ]]; do
             echo "Waiting for all pods to have been permanently deleted..."
             sleep 5
         done

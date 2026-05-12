@@ -74,7 +74,7 @@ while [[ "${#experiments_desc[@]}" -gt 0 ]]; do
     echo "Starting kubelet with binary $kubelet_bin and config file $kubelet_cfg, experiment $experiment_name"
     ./helpers/start_kubelet.sh "$kubelet_bins_dir/$kubelet_bin" "$kubelet_cfgs_dir/$kubelet_cfg"
 
-    ./helpers/play_traces.sh "$azure_machine_ids" "$cxl_vms_percentages_names" "../$results_dir"
+    ./helpers/play_traces.sh "$azure_machine_ids" "$cxl_vms_percentages_names" "$results_dir" "$kubelet_bin" "$kubelet_cfg"
 
     echo "Stopping kubelet with binary $kubelet_bin and config file $kubelet_cfg, experiment $experiment_name"
     ./helpers/stop_kubelet.sh

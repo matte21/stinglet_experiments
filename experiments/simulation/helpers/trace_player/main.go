@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"database/sql"
 	_ "embed"
+	_ "modernc.org/sqlite"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -46,6 +47,8 @@ var (
 	traceMachineID        int
 	kubeletType           string
 	cxlPercentageDBColumn string
+
+	hostName string
 
 	// Thes variables track some statistics we care about, either for the paper results, or
 	// as sanity checks.
@@ -112,6 +115,12 @@ type CPUManagerState struct {
 func main() {
 	parseFlagsOrDie()
 
+	var err error
+	if hostName, err = os.Hostname(); err != nil {
+		fmt.Fprintln(os.Stderr, "Fatal: couldn't read host name: %v.", err)
+		os.Exit(1)
+	}
+
 	hostTotalBytes, hostTotalMilliCores = getHostTotalResourcesOrDie()
 	hostFreeBytes, hostFreeMilliCores = hostTotalBytes, hostTotalMilliCores
 
@@ -120,7 +129,7 @@ func main() {
 
 	vmIDToRunningPod = make(map[int64]*runningPod)
 
-	if err := run(); err != nil {
+	if err = run(); err != nil {
 		fmt.Fprintf(os.Stderr, "Fatal: %v\n", err)
 		os.Exit(1)
 	}
@@ -732,7 +741,7 @@ func createPod(id uint32, cxlBytes, bytes, milliCores int64, isGuaranteed bool) 
 // podRejected spins until the kubelet API tells us whether the pod has been accepted or rejected.
 func podRejected(podID uint32) (bool, error) {
 	var i uint64
-	podName := "p-" + strconv.Itoa(int(podID))
+	podName := "p-" + strconv.Itoa(int(podID)) + "-" + hostName
 	for {
 		allPods, err := getPodsFromKubelet()
 		if err != nil {
