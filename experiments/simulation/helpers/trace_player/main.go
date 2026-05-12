@@ -71,6 +71,7 @@ var (
 	hostTotalMilliCores int64
 	hostFreeMilliCores  int64
 	avgMemUtilGiB       float64
+	hostTotalGiB        float64
 	memUtilSamples      uint64
 
 	//go:embed pod_manifest.yaml.tmpl
@@ -124,6 +125,7 @@ func main() {
 
 	hostTotalBytes, hostTotalMilliCores = getHostTotalResourcesOrDie()
 	hostFreeBytes, hostFreeMilliCores = hostTotalBytes, hostTotalMilliCores
+	hostTotalGiB = float64(hostTotalBytes) / (1 << 30)
 
 	podManifestTemplate = template.Must(template.New("pod-manifest").Parse(podManifestTemplateStr))
 	podFields = make(map[string]any, 6)
@@ -662,7 +664,7 @@ outer_loop:
 
 func sampleMemUtil(f *bufio.Writer) {
 	curMemUsedGiB := float64(hostTotalBytes-hostFreeBytes) / (1 << 30)
-	fmt.Fprintf(f, ",%g,%g,\n", curMemUsedGiB, 100*curMemUsedGiB/float64(hostTotalBytes))
+	fmt.Fprintf(f, ",%g,%g,\n", curMemUsedGiB, 100*curMemUsedGiB/hostTotalGiB)
 	memUtilSamples++
 	avgMemUtilGiB += (curMemUsedGiB - avgMemUtilGiB) / float64(memUtilSamples)
 }
