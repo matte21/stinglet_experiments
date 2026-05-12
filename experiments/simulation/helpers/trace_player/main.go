@@ -37,8 +37,8 @@ const (
 
 	unexpectedAdmissionErr = "UnexpectedAdmissionError"
 
-	memoryMgrStateFile = "/var/lib/kubelet/memory_manager_state"
-	cpuMgrStateFile    = "/var/lib/kubelet/cpu_manager_state"
+	// memoryMgrStateFile = "/var/lib/kubelet/memory_manager_state"
+	// cpuMgrStateFile    = "/var/lib/kubelet/cpu_manager_state"
 )
 
 var (
@@ -50,6 +50,8 @@ var (
 	kubeletType           string
 	cxlPercentageDBColumn string
 	timeout               time.Duration
+	memoryMgrStateFile    string
+	cpuMgrStateFile       string
 
 	hostName string
 
@@ -217,6 +219,8 @@ func parseFlagsOrDie() {
 	flag.StringVar(&kubeletType, "kubelet-type", "", "either \"standard\" or \"stinglet\"")
 	flag.StringVar(&cxlPercentageDBColumn, "cxl-percentage-db-column", "", "Name of the column in the trace table that stores the percentage of working set memory that the VM wants on CXL")
 	flag.DurationVar(&timeout, "timeout", 10*time.Minute, "How long the simulation should run for, e.g. 10m, 1h, 30s")
+	flag.StringVar(&memoryMgrStateFile, "memory-manager-state-file", "/var/lib/kubelet/memory_manager_state", "Path to the kubelet memory manager state file")
+	flag.StringVar(&cpuMgrStateFile, "cpu-manager-state-file", "/var/lib/kubelet/cpu_manager_state", "Path to the kubelet CPU manager state file")
 
 	flag.Parse()
 
