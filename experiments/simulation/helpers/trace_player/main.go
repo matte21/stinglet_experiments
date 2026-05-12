@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"database/sql"
 	_ "embed"
 	"encoding/json"
@@ -48,6 +49,7 @@ var (
 	traceMachineID        int
 	kubeletType           string
 	cxlPercentageDBColumn string
+	timeout               time.Duration
 
 	hostName string
 
@@ -214,6 +216,7 @@ func parseFlagsOrDie() {
 	flag.IntVar(&traceMachineID, "trace-machine-id", -1, "Azure machine type ID the resource requests in the trace are relative to")
 	flag.StringVar(&kubeletType, "kubelet-type", "", "either \"standard\" or \"stinglet\"")
 	flag.StringVar(&cxlPercentageDBColumn, "cxl-percentage-db-column", "", "Name of the column in the trace table that stores the percentage of working set memory that the VM wants on CXL")
+	flag.DurationVar(&timeout, "timeout", 10*time.Minute, "How long the simulation should run for, e.g. 10m, 1h, 30s")
 
 	flag.Parse()
 
@@ -507,7 +510,19 @@ func playTrace(traceEvents *sql.Rows, memUtilFile *bufio.Writer) error {
 
 	var playedEventsCount uint64
 	var err error
+
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
 	for traceEvents.Next() {
+		select {
+		case <-ctx.Done():
+			fmt.Println("Timeout reached, stopping trace replay.")
+			deleteRemainingPods()
+			return nil
+		default:
+		}
+
 		// Read a single event, either a VM/Pod arrival/departure.
 		if cxlPercentageDBColumn == "nop" {
 			err = traceEvents.Scan(&vmID, &priority, &cores, &memory)

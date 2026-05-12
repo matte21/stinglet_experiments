@@ -45,7 +45,8 @@ for mid in ${machine_ids//,/ }; do
             --cxl-percentage-db-column "$cpdc" \
             --results-dir "$results_dir" \
             --results-file-prefix "${kubelet_bin}_${kubelet_cfg}_${mid}" \
-            --kubelet-type "$kubelet_type" > "$log_file" 2>&1
+            --kubelet-type "$kubelet_type" \
+            --timeout "10m" > "$log_file" 2>&1
 
         # play_trace cleans up the pods but exits as soon as kubelet cleared their state. But the
         # containers state might still exist, because the container runtime cleans them up
