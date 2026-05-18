@@ -1,0 +1,56 @@
+preliminary studies:
+
+for each machine ID {
+    1. compute minNumHosts = minimum number of hosts needed to avoid rejections.
+    2. compute maximum savings that stinglet can give us: distribution of sizes.
+}
+
+how do we estimate minNumHosts?
+
+let ccpur(t) be the sum of the CPU requests of all VMs running at time t.
+let cmemr(t) be the sum of the memory requests of all VMs running at time t.
+
+with:
+maxCcpur = max(ccpur(t) for every t).
+maxCmemr = max(cmemr(t) for every t).
+
+minNumHosts = max(ccpur_max, cmemr_max).
+
+We can then measure kubelet and stinglet (agents) performance assuming that
+there's minNumHosts in the data centers, and see which one rejects more workloads.
+
+One problem is that the result depends on the scheduling policy too. Which
+scheduling policy do we use? I think the K8s scheduler has a simulator, so we can
+use that and two common K8s policies. Or maybe Protean has something? What are
+the default K8s scheduling policies?
+
+So assume we have a scheduling policy. What next? Let's do point 2.
+
+Well, before we do anything, we want to estimate a bound on the improvement that
+stinglet can achieve over kubelet. Let's make this assumption: anything that needs
+more than one NUMA node, is going to be rejected by kubelet. Why? Because of
+kubelet's constraint that apps memory nodes cannot overlap unless they are identical.
+Assumption: anything needing more than one NUMA node worth of memory will be
+rejected.
+
+Then, we must simply determine the fraction of memory on a host that's in a
+single NUMA. Issue: our hosts are asymmetric. The zNUMA has way less memory than
+the nNUMA. What do we do? Best and worst case simplifying assumptions. Best
+case: all NUMA nodes have as much memory as the zNUMA. Worst case: all NUMA
+nodes have as much memory as the nNUMA. Then we know how many hosts/memory are
+underutilized.
+
+Ok, so what does an experiment look like?
+
+for each kubelet binary+config {
+    for each machine ID {
+        instantiate all hosts with the given agent version.
+        wire them with the scheduler.
+        start the simulation.
+    }
+}
+
+Biggest uncertanties:
+1. scheduling simulator.
+2. pulling the admit handler from various kubelet versions and configurations.
+3. stinglet data structures.
