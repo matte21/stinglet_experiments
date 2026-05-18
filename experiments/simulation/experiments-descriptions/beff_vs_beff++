@@ -1,11 +1,11 @@
 [experiment_1]
 kubelet_bin=v1.33.0-std
 config=beff
-machine_ids=16,19
+machine_ids=10
 cxl_ratios=
 
 [experiment_2]
 kubelet_bin=v1.33.0++
 config=beff
-machine_ids=16,19
-cxl_ratios=pond,greensku
+machine_ids=10
+cxl_ratios=
