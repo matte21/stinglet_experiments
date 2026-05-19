@@ -35,6 +35,11 @@ const (
 	// (as a fraction of the host's total) that causes a VM to count as rejected in our estimate.
 	vlabRejectionMemReq float64 = vlabNNUMAGiB / vlabTotGiB
 	s4RejectionMemReq   float64 = s4NNUMAGiB / s4TotGiB
+
+	// How many trace events between consecutive log statements that inform users about how far
+	// in playing the trace we are. I've found 300000 to be a good trade-off between responsiveness
+	// and conciseness.
+	traceEventsLoggingPeriod uint32 = 300000
 )
 
 var machineIDToStats map[int]*machineIDStats
@@ -117,16 +122,22 @@ func analyzeMachineIDOrDie(machineID int) {
 
 	stats := machineIDToStats[machineID]
 	var (
-		vmID        int64
-		priority    int64
-		cpus        float64
-		mem         float64
-		totalCPUReq float64
-		totalMemReq float64
+		vmID                 int64
+		priority             int64
+		cpus                 float64
+		mem                  float64
+		totalCPUReq          float64
+		totalMemReq          float64
+		traceEventsProcessed uint32
 	)
 	for traceEvents.Next() {
 		if err = traceEvents.Scan(&vmID, &priority, &cpus, &mem); err != nil {
 			log.Fatalf("Failed to read row from trace of machine %d: %v", machineID, err)
+		}
+
+		traceEventsProcessed++
+		if traceEventsProcessed%traceEventsLoggingPeriod == 0 {
+			fmt.Printf("Processed %d trace events\n", traceEventsProcessed)
 		}
 
 		// Increase total current amount of CPU and memory requests, or decrease it if the event is
