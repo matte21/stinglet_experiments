@@ -215,21 +215,29 @@ func printMachineIDStats(mid int, stats *machineIDStats, resDir string) {
 	fmt.Fprintf(f, "num VMs,%d,\n"+
 		"min num hosts,%d,\n"+
 		"s4 baseline num rejected VMs,%d,\n"+
+		"s4 baseline rejected VMs %%,%.2f,\n"+
 		"s4 baseline wasted hosts,%.2f,\n"+
 		"s4 baseline wasted hosts percentage,%.2f,\n"+
+		"s4 min request for rejection,%.2f,\n"+
 		"vlab baseline num rejected VMs,%d,\n"+
+		"vlab baseline rejected VMs %%,%.2f,\n"+
 		"vlab baseline wasted hosts,%.2f,\n"+
 		"vlab baseline wasted hosts percentage,%.2f,\n"+
+		"vlab min request for rejection,%.2f,\n"+
 		"num distinct cpu requests,%d,\n"+
 		"num distinct mem requests,%d,\n\n",
 		stats.totalVMs,
 		stats.minNumHosts,
 		stats.s4BaselineRejectionsCount,
+		100*float64(stats.s4BaselineRejectionsCount)/float64(stats.totalVMs),
 		stats.s4BaselineHostsWastedCapacity,
 		100*stats.s4BaselineHostsWastedCapacity/float64(stats.minNumHosts),
+		s4RejectionMemReq,
 		stats.vlabBaselineRejectionsCount,
+		100*float64(stats.vlabBaselineRejectionsCount)/float64(stats.totalVMs),
 		stats.vlabBaselineHostsWastedCapacity,
 		100*stats.vlabBaselineHostsWastedCapacity/float64(stats.minNumHosts),
+		vlabRejectionMemReq,
 		len(stats.cpuReqsToCount),
 		len(stats.memReqsToCount))
 
