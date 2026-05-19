@@ -262,7 +262,7 @@ func formatReqsCountsForCSVFile(reqsToCount map[float64]uint32) string {
 	}
 
 	// Concatenate the heading and values lines.
-	fmt.Fprintf(&reqsHistogramHeadings, "\n%s\n\n", reqsHistogramVals.String())
+	fmt.Fprintf(&reqsHistogramHeadings, "\n%s", reqsHistogramVals.String())
 
 	return reqsHistogramHeadings.String()
 }
