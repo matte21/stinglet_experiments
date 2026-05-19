@@ -18,7 +18,22 @@ var (
 	machineIDsList string
 )
 
-const nopCXLPercentageColumn string = "nop"
+const (
+	nopCXLPercentageColumn string = "nop"
+
+	vlabNNUMAGiB float64 = 252
+	vlabTotGiB   float64 = 520
+
+	s4NNUMAGiB float64 = 126
+	s4TotGiB   float64 = 568
+
+	// To (guess)estimate the rejections under the baseline, we assume any VM requiring more than
+	// one nNUMA's worth of memory is rejected, due to kubelet's rule that apps can share NUMA nodes
+	// for memory only if they're identical. The following consts hold the minimum memory request
+	// (as a fraction of the host's total) that causes a VM to count as rejected in our estimate.
+	vlabRejectionMemReq float64 = vlabNNUMAGiB / vlabTotGiB
+	s4RejectionMemReq   float64 = s4NNUMAGiB / s4TotGiB
+)
 
 var machineIDToStats map[int]*machineIDStats
 
@@ -30,11 +45,11 @@ type machineIDStats struct {
 	cpuReqsToCount map[float64]uint32
 	memReqsToCount map[float64]uint32
 
-	vlabBaselineRejectionsCount uint32
-	s4BaselineRejectionsCount   uint32
-
+	vlabBaselineRejectionsCount     uint32
 	vlabBaselineHostsWastedCapacity float64
-	s4BaselineHostsWastedCapacity   float64
+
+	s4BaselineRejectionsCount     uint32
+	s4BaselineHostsWastedCapacity float64
 }
 
 func main() {
@@ -90,8 +105,7 @@ func parseFlagsOrDie() {
 }
 
 func analyzeMachineIDOrDie(machineID int) {
-	traceEvents, cleanupFunc, err := trace.Get(dbFilePath, machineID,
-		nopCXLPercentageColumn)
+	traceEvents, cleanupFunc, err := trace.Get(dbFilePath, machineID, nopCXLPercentageColumn)
 	if err != nil {
 		log.Fatalf("Failed to get trace: %v", err)
 	}
@@ -125,16 +139,26 @@ func analyzeMachineIDOrDie(machineID int) {
 			continue
 		}
 
-		if stats.minNumHosts < uint32(math.Ceil(totalCPUReq)) {
-			stats.minNumHosts = uint32(math.Ceil(totalCPUReq))
+		if cr := uint32(math.Ceil(totalCPUReq)); stats.minNumHosts < cr {
+			stats.minNumHosts = cr
 		}
-		if stats.minNumHosts < uint32(math.Ceil(totalMemReq)) {
-			stats.minNumHosts = uint32(math.Ceil(totalMemReq))
+		if mr := uint32(math.Ceil(totalMemReq)); stats.minNumHosts < mr {
+			stats.minNumHosts = mr
 		}
 
 		stats.totalVMs++
 		stats.cpuReqsToCount[cpus]++
 		stats.memReqsToCount[mem]++
+
+		if mem >= vlabRejectionMemReq {
+			stats.vlabBaselineRejectionsCount++
+			stats.vlabBaselineHostsWastedCapacity += mem
+		}
+
+		if mem >= s4RejectionMemReq {
+			stats.s4BaselineRejectionsCount++
+			stats.s4BaselineHostsWastedCapacity += mem
+		}
 	}
 }
 
