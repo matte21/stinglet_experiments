@@ -21,14 +21,31 @@ var (
 const nopCXLPercentageColumn string = "nop"
 
 var (
-	machineIDToMinNumHosts       		map[int]uint32
-	machineIDToCPURequestToCount 		map[int]map[float64]uint32
-	machineIDToMemRequestToCount 		map[int]map[float64]uint32
-	vlabMachineIDToBaselineRejectedCount 	map[int]uint32
+	machineIDToMinNumHosts                  map[int]uint32
+	machineIDToCPURequestToCount            map[int]map[float64]uint32
+	machineIDToMemRequestToCount            map[int]map[float64]uint32
+	vlabMachineIDToBaselineRejectedCount    map[int]uint32
 	vlabMachineIDToBaselineHostsWastedCount map[int]uint32
-	s4MachineIDToBaselineRejectedCount 	map[int]uint32
-	s4MachineIDToBaselineHostsWastedCount map[int]uint32
+	s4MachineIDToBaselineRejectedCount      map[int]uint32
+	s4MachineIDToBaselineHostsWastedCount   map[int]uint32
 )
+
+var machineIDToStats map[int]*machineIDStats
+
+type machineIDStats struct {
+	totalVMs uint32
+
+	minNumHosts uint32
+
+	cpuReqsToCount map[float64]uint32
+	memReqsToCount map[float64]uint32
+
+	vlabBaselineRejectionsCount uint32
+	s4BaselineRejectionsCount   uint32
+
+	vlabBaselineHostsWastedCapacity float64
+	s4BaselineHostsWastedCapacity   float64
+}
 
 func main() {
 	parseFlagsOrDie()
@@ -58,19 +75,19 @@ func parseFlagsOrDie() {
 
 	// Parse the machine IDs list.
 	mIDs := strings.Split(strings.TrimSpace(machineIDsList), ",")
-	if len(mIDs) == 0 {
+	if len(mIDs) == 0 || (len(mIDs) == 1 && mIDs[0] == "") {
 		fmt.Fprintln(os.Stderr, "Fatal: need at least one machine ID, none provided."+
 			" Format: --machine-ids <ID 1> or --machine-ids <ID 1>,<ID 2>, ...,<ID N>."+
 			" The IDs must be integers")
 		flag.Usage()
 		os.Exit(1)
 	}
-	machineIDToMinNumHosts 				= make(map[int]uint32, len(mIDs))
-	machineIDToCPURequestToCount 		= make(map[int]map[float64]uint32, len(mIDs))
-	machineIDToMemRequestToCount 		= make(map[int]map[float64]uint32, len(mIDs))
-	vlabMachineIDToBaselineRejectedCount 	= make(map[int]uint32, len(mIDs))
+	machineIDToMinNumHosts = make(map[int]uint32, len(mIDs))
+	machineIDToCPURequestToCount = make(map[int]map[float64]uint32, len(mIDs))
+	machineIDToMemRequestToCount = make(map[int]map[float64]uint32, len(mIDs))
+	vlabMachineIDToBaselineRejectedCount = make(map[int]uint32, len(mIDs))
 	vlabMachineIDToBaselineHostsWastedCount = make(map[int]uint32, len(mIDs))
-	s4MachineIDToBaselineRejectedCount 	= make(map[int]uint32, len(mIDs))
+	s4MachineIDToBaselineRejectedCount = make(map[int]uint32, len(mIDs))
 	s4MachineIDToBaselineHostsWastedCount = make(map[int]uint32, len(mIDs))
 	for _, idStr := range mIDs {
 		id, err := strconv.Atoi(strings.TrimSpace(idStr))
@@ -142,6 +159,6 @@ func analyzeMachineIDOrDie(machineID int) {
 func printResults() {
 	for mid := range machineIDToMinNumHosts {
 		fmt.Printf("mid: %d, cpus: %d, mem: %d, minNumHosts: %d\n", mid, len(machineIDToCPURequestToCount[mid]),
-			len(machineIDToMemRequestToCount[mid]), machineIDToMinNumHosts[[mid]])
+			len(machineIDToMemRequestToCount[mid]), machineIDToMinNumHosts[mid])
 	}
 }
