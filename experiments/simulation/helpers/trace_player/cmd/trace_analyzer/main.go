@@ -20,16 +20,6 @@ var (
 
 const nopCXLPercentageColumn string = "nop"
 
-var (
-	machineIDToMinNumHosts                  map[int]uint32
-	machineIDToCPURequestToCount            map[int]map[float64]uint32
-	machineIDToMemRequestToCount            map[int]map[float64]uint32
-	vlabMachineIDToBaselineRejectedCount    map[int]uint32
-	vlabMachineIDToBaselineHostsWastedCount map[int]uint32
-	s4MachineIDToBaselineRejectedCount      map[int]uint32
-	s4MachineIDToBaselineHostsWastedCount   map[int]uint32
-)
-
 var machineIDToStats map[int]*machineIDStats
 
 type machineIDStats struct {
@@ -51,7 +41,7 @@ func main() {
 	parseFlagsOrDie()
 
 	// Iterate over all machine IDs, and collect statistics for each machineID.
-	for mid := range machineIDToMinNumHosts {
+	for mid := range machineIDToStats {
 		analyzeMachineIDOrDie(mid)
 	}
 
@@ -75,20 +65,14 @@ func parseFlagsOrDie() {
 
 	// Parse the machine IDs list.
 	mIDs := strings.Split(strings.TrimSpace(machineIDsList), ",")
-	if len(mIDs) == 0 || (len(mIDs) == 1 && mIDs[0] == "") {
+	if len(mIDs) == 0 {
 		fmt.Fprintln(os.Stderr, "Fatal: need at least one machine ID, none provided."+
 			" Format: --machine-ids <ID 1> or --machine-ids <ID 1>,<ID 2>, ...,<ID N>."+
 			" The IDs must be integers")
 		flag.Usage()
 		os.Exit(1)
 	}
-	machineIDToMinNumHosts = make(map[int]uint32, len(mIDs))
-	machineIDToCPURequestToCount = make(map[int]map[float64]uint32, len(mIDs))
-	machineIDToMemRequestToCount = make(map[int]map[float64]uint32, len(mIDs))
-	vlabMachineIDToBaselineRejectedCount = make(map[int]uint32, len(mIDs))
-	vlabMachineIDToBaselineHostsWastedCount = make(map[int]uint32, len(mIDs))
-	s4MachineIDToBaselineRejectedCount = make(map[int]uint32, len(mIDs))
-	s4MachineIDToBaselineHostsWastedCount = make(map[int]uint32, len(mIDs))
+	machineIDToStats = make(map[int]*machineIDStats, len(mIDs))
 	for _, idStr := range mIDs {
 		id, err := strconv.Atoi(strings.TrimSpace(idStr))
 		if err != nil {
@@ -98,9 +82,10 @@ func parseFlagsOrDie() {
 			flag.Usage()
 			os.Exit(1)
 		}
-		machineIDToMinNumHosts[id] = 0
-		machineIDToCPURequestToCount[id] = make(map[float64]uint32)
-		machineIDToMemRequestToCount[id] = make(map[float64]uint32)
+		machineIDToStats[id] = &machineIDStats{
+			cpuReqsToCount: make(map[float64]uint32),
+			memReqsToCount: make(map[float64]uint32),
+		}
 	}
 }
 
@@ -114,8 +99,7 @@ func analyzeMachineIDOrDie(machineID int) {
 
 	fmt.Printf("Analyzing trace for machine ID %d\n", machineID)
 
-	cpuReqToCount := machineIDToCPURequestToCount[machineID]
-	memReqToCount := machineIDToMemRequestToCount[machineID]
+	stats := machineIDToStats[machineID]
 	var (
 		vmID        int64
 		priority    int64
@@ -123,7 +107,6 @@ func analyzeMachineIDOrDie(machineID int) {
 		mem         float64
 		totalCPUReq float64
 		totalMemReq float64
-		minNumHosts uint32
 	)
 	for traceEvents.Next() {
 		if err = traceEvents.Scan(&vmID, &priority, &cpus, &mem); err != nil {
@@ -142,23 +125,22 @@ func analyzeMachineIDOrDie(machineID int) {
 			continue
 		}
 
-		if minNumHosts < uint32(math.Ceil(totalCPUReq)) {
-			minNumHosts = uint32(math.Ceil(totalCPUReq))
+		if stats.minNumHosts < uint32(math.Ceil(totalCPUReq)) {
+			stats.minNumHosts = uint32(math.Ceil(totalCPUReq))
 		}
-		if minNumHosts < uint32(math.Ceil(totalMemReq)) {
-			minNumHosts = uint32(math.Ceil(totalMemReq))
+		if stats.minNumHosts < uint32(math.Ceil(totalMemReq)) {
+			stats.minNumHosts = uint32(math.Ceil(totalMemReq))
 		}
 
-		cpuReqToCount[cpus]++
-		memReqToCount[mem]++
+		stats.totalVMs++
+		stats.cpuReqsToCount[cpus]++
+		stats.memReqsToCount[mem]++
 	}
-
-	machineIDToMinNumHosts[machineID] = minNumHosts
 }
 
 func printResults() {
-	for mid := range machineIDToMinNumHosts {
-		fmt.Printf("mid: %d, cpus: %d, mem: %d, minNumHosts: %d\n", mid, len(machineIDToCPURequestToCount[mid]),
-			len(machineIDToMemRequestToCount[mid]), machineIDToMinNumHosts[mid])
+	for mid, stats := range machineIDToStats {
+		fmt.Printf("mid: %d, cpus: %d, mem: %d, minNumHosts: %d\n",
+			mid, len(stats.cpuReqsToCount), len(stats.memReqsToCount), stats.minNumHosts)
 	}
 }
