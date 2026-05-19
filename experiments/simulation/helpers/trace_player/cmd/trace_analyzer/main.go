@@ -6,8 +6,10 @@ import (
 	"log"
 	"math"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"trace_player/internal/trace"
 )
@@ -60,7 +62,7 @@ func main() {
 		analyzeMachineIDOrDie(mid)
 	}
 
-	printResults()
+	printStats()
 }
 
 func parseFlagsOrDie() {
@@ -162,9 +164,94 @@ func analyzeMachineIDOrDie(machineID int) {
 	}
 }
 
-func printResults() {
+func printStats() {
+	// Create the directory that will hold all files with the stats.
+	resDir := createStatsDirOrDie()
+
 	for mid, stats := range machineIDToStats {
-		fmt.Printf("mid: %d, cpus: %d, mem: %d, minNumHosts: %d\n",
-			mid, len(stats.cpuReqsToCount), len(stats.memReqsToCount), stats.minNumHosts)
+		printMachineIDStats(mid, stats, resDir)
 	}
+}
+
+func createStatsDirOrDie() string {
+	now := time.Now().Format("2006-01-02-15-04-05")
+	resDir := "trace_analysis/" + now
+	if err := os.MkdirAll(resDir, 0755); err != nil {
+		log.Fatalf("Failed to create results directory %s: %v", resDir, err)
+	}
+	return resDir
+}
+
+func printMachineIDStats(mid int, stats *machineIDStats, resDir string) {
+	// Create and open file to which we'll write the stats.
+	statsFilePath := fmt.Sprintf("%s/machine-id-%d.csv", resDir, mid)
+	f, err := os.Create(statsFilePath)
+	if err != nil {
+		fmt.Printf("Failed to create stats file %s for machine ID %d: %v\n",
+			statsFilePath, mid, err)
+		// do not panic or exit: there are other machine IDs whose stats we might be able to
+		// print.
+		return
+	}
+	defer func() {
+		if err := f.Close(); err != nil {
+			fmt.Printf("Failed to close stats file %s for machine ID %d: %v\n",
+				statsFilePath, mid, err)
+		}
+	}()
+
+	// Print summary stats.
+	fmt.Fprintf(f, "num VMs,%d,\n"+
+		"min num hosts,%d,\n"+
+		"s4 baseline num rejected VMs,%d,\n"+
+		"s4 baseline wasted hosts,%.2f,\n"+
+		"s4 baseline wasted hosts percentage,%.2f,\n"+
+		"vlab baseline num rejected VMs,%d,\n"+
+		"vlab baseline wasted hosts,%.2f,\n"+
+		"vlab baseline wasted hosts percentage,%.2f,\n"+
+		"num distinct cpu requests,%d,\n"+
+		"num distinct mem requests,%d,\n\n",
+		stats.totalVMs,
+		stats.minNumHosts,
+		stats.s4BaselineRejectionsCount,
+		stats.s4BaselineHostsWastedCapacity,
+		100*stats.s4BaselineHostsWastedCapacity/float64(stats.minNumHosts),
+		stats.vlabBaselineRejectionsCount,
+		stats.vlabBaselineHostsWastedCapacity,
+		100*stats.vlabBaselineHostsWastedCapacity/float64(stats.minNumHosts),
+		len(stats.cpuReqsToCount),
+		len(stats.memReqsToCount))
+
+	cpuReqsCSVLines := formatReqsCountsForCSVFile(stats.cpuReqsToCount)
+	memReqsCSVLines := formatReqsCountsForCSVFile(stats.memReqsToCount)
+
+	cpuLinesHeading := "CPU requests histogram,"
+	memLinesHeading := "Memory requests histogram,"
+	fmt.Fprintf(f, "%s\n%s\n\n%s\n%s\n",
+		cpuLinesHeading, cpuReqsCSVLines, memLinesHeading, memReqsCSVLines)
+}
+
+func formatReqsCountsForCSVFile(reqsToCount map[float64]uint32) string {
+	sortedReqs := make([]float64, 0, len(reqsToCount))
+	for r := range reqsToCount {
+		sortedReqs = append(sortedReqs, r)
+	}
+	slices.Sort(sortedReqs)
+
+	// these "histograms" are strings formatted as CSV file rows.
+	reqsHistogramHeadings := strings.Builder{}
+	reqsHistogramVals := strings.Builder{}
+
+	reqsHistogramHeadings.WriteString("request,")
+	reqsHistogramVals.WriteString("VM count,")
+
+	for _, r := range sortedReqs {
+		fmt.Fprintf(&reqsHistogramHeadings, "%.2f,", r)
+		fmt.Fprintf(&reqsHistogramVals, "%d,", reqsToCount[r])
+	}
+
+	// Concatenate the heading and values lines.
+	fmt.Fprintf(&reqsHistogramHeadings, "\n%s\n\n", reqsHistogramVals.String())
+
+	return reqsHistogramHeadings.String()
 }
