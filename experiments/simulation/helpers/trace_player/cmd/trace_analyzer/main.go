@@ -26,6 +26,8 @@ var (
 	machineIDToMemRequestToCount 		map[int]map[float64]uint32
 	vlabMachineIDToBaselineRejectedCount 	map[int]uint32
 	vlabMachineIDToBaselineHostsWastedCount map[int]uint32
+	s4MachineIDToBaselineRejectedCount 	map[int]uint32
+	s4MachineIDToBaselineHostsWastedCount map[int]uint32
 )
 
 func main() {
@@ -68,6 +70,8 @@ func parseFlagsOrDie() {
 	machineIDToMemRequestToCount 		= make(map[int]map[float64]uint32, len(mIDs))
 	vlabMachineIDToBaselineRejectedCount 	= make(map[int]uint32, len(mIDs))
 	vlabMachineIDToBaselineHostsWastedCount = make(map[int]uint32, len(mIDs))
+	s4MachineIDToBaselineRejectedCount 	= make(map[int]uint32, len(mIDs))
+	s4MachineIDToBaselineHostsWastedCount = make(map[int]uint32, len(mIDs))
 	for _, idStr := range mIDs {
 		id, err := strconv.Atoi(strings.TrimSpace(idStr))
 		if err != nil {
