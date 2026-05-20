@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 
-	_ "k8s.io/kubernetes/pkg/scheduler"
+	"k8s.io/kubernetes/pkg/scheduler"
 )
 
 var Version = "dev"
@@ -11,4 +11,6 @@ var Version = "dev"
 func main() {
 	fmt.Println(Version)
 	foo()
+	s := &scheduler.Scheduler{}
+	s.SimSchedulePod()
 }
