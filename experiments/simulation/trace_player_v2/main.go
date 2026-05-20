@@ -39,11 +39,11 @@ func newSchedulerOrDie(numNodes uint32, hostMilliCPUs, hostBytes int64) *schedul
 	// TODO: replace with nodes loaded from trace
 	for i := 0; i < int(numNodes); i++ {
 		name := fmt.Sprintf("node-%d", i)
-		objs = append(objs, newNode(name, hostBytes, hostMilliCPUs))
+		objs = append(objs, newHost(name, hostBytes, hostMilliCPUs))
 	}
 
 	client := clientsetfake.NewClientset(objs...)
-	broadcaster := events.NewBroadcaster(&events.EventSinkImpl{Interface: client.EventsV1()})
+	broadcaster := events.NewBroadcaster(nopEventSink{})
 	informerFactory := informers.NewSharedInformerFactory(client, 0)
 
 	s, err := scheduler.New(
@@ -69,7 +69,7 @@ func newSchedulerOrDie(numNodes uint32, hostMilliCPUs, hostBytes int64) *schedul
 	return s
 }
 
-func newNode(name string, milliCPUs, bytes int64) *v1.Node {
+func newHost(name string, bytes, milliCPUs int64) *v1.Node {
 	return &v1.Node{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: name,
