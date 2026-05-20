@@ -62,7 +62,7 @@ type machineIDStats struct {
 func main() {
 	parseFlagsOrDie()
 
-	// Iterate over all machine IDs, and collect statistics for each machineID.
+	// Iterate over all machine IDs, and collect statistics for each machine ID.
 	for mid := range machineIDToStats {
 		analyzeMachineIDOrDie(mid)
 	}
@@ -74,7 +74,7 @@ func parseFlagsOrDie() {
 	flag.StringVar(&dbFilePath, "db-file-path", "",
 		"Path to the SQLite trace database file")
 	flag.StringVar(&machineIDsList, "machine-ids", "",
-		"Comma-separated list of the IDs of the azure trace machine types that we want to analyze")
+		"Comma-separated list of the IDs of the azure trace machine types to analyze")
 
 	flag.Parse()
 
@@ -87,13 +87,6 @@ func parseFlagsOrDie() {
 
 	// Parse the machine IDs list.
 	mIDs := strings.Split(strings.TrimSpace(machineIDsList), ",")
-	if len(mIDs) == 0 {
-		fmt.Fprintln(os.Stderr, "Fatal: need at least one machine ID, none provided."+
-			" Format: --machine-ids <ID 1> or --machine-ids <ID 1>,<ID 2>, ...,<ID N>."+
-			" The IDs must be integers")
-		flag.Usage()
-		os.Exit(1)
-	}
 	machineIDToStats = make(map[int]*machineIDStats, len(mIDs))
 	for _, idStr := range mIDs {
 		id, err := strconv.Atoi(strings.TrimSpace(idStr))
@@ -118,7 +111,7 @@ func analyzeMachineIDOrDie(machineID int) {
 	}
 	defer cleanupFunc()
 
-	fmt.Printf("Analyzing trace for machine ID %d\n", machineID)
+	fmt.Printf("\nAnalyzing trace for machine ID %d\n", machineID)
 
 	stats := machineIDToStats[machineID]
 	var (
@@ -265,7 +258,7 @@ func formatReqsCountsForCSVFile(reqsToCount map[float64]uint32) string {
 	reqsHistogramVals.WriteString("VM count,")
 
 	for _, r := range sortedReqs {
-		fmt.Fprintf(&reqsHistogramHeadings, "%.2f,", r)
+		fmt.Fprintf(&reqsHistogramHeadings, "%.4f,", r)
 		fmt.Fprintf(&reqsHistogramVals, "%d,", reqsToCount[r])
 	}
 
