@@ -54,3 +54,11 @@ Biggest uncertanties:
 1. scheduling simulator.
 2. pulling the admit handler from various kubelet versions and configurations.
 3. stinglet data structures.
+
+---
+
+scheduling configuration: which plugins do we enable and disable??
+
+k8s default list is at: https://kubernetes.io/docs/reference/scheduling/config/#scheduling-plugins
+
+NodeResourcesFit / NodeResourceBalancedAllocation are the only ones we need.
