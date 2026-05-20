@@ -10,4 +10,5 @@ var Version = "dev"
 
 func main() {
 	fmt.Println(Version)
+	foo()
 }
