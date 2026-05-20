@@ -22,6 +22,8 @@ import (
 // TODO: consider using a context with cancel for the scheduler since we plan to reuse the
 // same scheduler to play multiple independent traces.
 
+const miniDefaultK8sScheduler = "mini-default-k8s-sched"
+
 var Version = "dev"
 
 func main() {
@@ -52,10 +54,21 @@ func newSchedulerOrDie(numNodes uint32, hostMilliCPUs, hostBytes int64) *schedul
 		informerFactory,
 		nil,
 		profile.NewRecorderFactory(broadcaster),
-		// TODO: we don't want the default!
 		scheduler.WithProfiles(
-			schedulerapi.KubeSchedulerProfile{
-				SchedulerName: "default-scheduler",
+			// We don't want to be attacked on the choice of the scheduling policy. So we pass the
+			// "default" K8s scheduler, i.e., enable all default plugins. Note that we don't
+			// actually pass all default plugins, because some are out of scope. i.e. in our
+			// experiments pods only request CPUs and memory, not storage, so we disable all plugins
+			// dealing with storage volumes are disabled.
+			schedulerapi.KubeSchedulerProfile{SchedulerName: miniDefaultK8sScheduler,
+				Plugins: &schedulerapi.Plugins{
+					PreFilter: schedulerapi.PluginSet{Enabled: []schedulerapi.Plugin{{Name: "NodeResourcesFit"}}},
+					Filter:    schedulerapi.PluginSet{Enabled: []schedulerapi.Plugin{{Name: "NodeResourcesFit"}}},
+					Score: schedulerapi.PluginSet{Enabled: []schedulerapi.Plugin{
+						{Name: "NodeResourcesFit"},
+						{Name: "NodeResourcesBalancedAllocation"},
+					}},
+				},
 			},
 		),
 	)
