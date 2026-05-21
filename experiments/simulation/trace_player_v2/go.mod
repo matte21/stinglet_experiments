@@ -104,58 +104,34 @@ require (
 	sigs.k8s.io/yaml v1.4.0 // indirect
 )
 
-replace k8s.io/kubernetes => /home/molivi/k8s/
+replace (
 
-replace k8s.io/kube-controller-manager => /home/molivi/k8s/staging/src/k8s.io/kube-controller-manager
-
-replace k8s.io/kube-proxy => /home/molivi/k8s/staging/src/k8s.io/kube-proxy
-
-replace k8s.io/kube-scheduler => /home/molivi/k8s/staging/src/k8s.io/kube-scheduler
-
-replace k8s.io/kubectl => /home/molivi/k8s/staging/src/k8s.io/kubectl
-
-replace k8s.io/kubelet => /home/molivi/k8s/staging/src/k8s.io/kubelet
-
-replace k8s.io/metrics => /home/molivi/k8s/staging/src/k8s.io/metrics
-
-replace k8s.io/mount-utils => /home/molivi/k8s/staging/src/k8s.io/mount-utils
-
-replace k8s.io/pod-security-admission => /home/molivi/k8s/staging/src/k8s.io/pod-security-admission
-
-replace k8s.io/sample-apiserver => /home/molivi/k8s/staging/src/k8s.io/sample-apiserver
-
-replace k8s.io/sample-cli-plugin => /home/molivi/k8s/staging/src/k8s.io/sample-cli-plugin
-
-replace k8s.io/sample-controller => /home/molivi/k8s/staging/src/k8s.io/sample-controller
-
-replace k8s.io/api => /home/molivi/k8s/staging/src/k8s.io/api
-
-replace k8s.io/apiextensions-apiserver => /home/molivi/k8s/staging/src/k8s.io/apiextensions-apiserver
-
-replace k8s.io/apimachinery => /home/molivi/k8s/staging/src/k8s.io/apimachinery
-
-replace k8s.io/apiserver => /home/molivi/k8s/staging/src/k8s.io/apiserver
-
-replace k8s.io/cli-runtime => /home/molivi/k8s/staging/src/k8s.io/cli-runtime
-
-replace k8s.io/client-go => /home/molivi/k8s/staging/src/k8s.io/client-go
-
-replace k8s.io/cloud-provider => /home/molivi/k8s/staging/src/k8s.io/cloud-provider
-
-replace k8s.io/cluster-bootstrap => /home/molivi/k8s/staging/src/k8s.io/cluster-bootstrap
-
-replace k8s.io/code-generator => /home/molivi/k8s/staging/src/k8s.io/code-generator
-
-replace k8s.io/component-base => /home/molivi/k8s/staging/src/k8s.io/component-base
-
-replace k8s.io/component-helpers => /home/molivi/k8s/staging/src/k8s.io/component-helpers
-
-replace k8s.io/controller-manager => /home/molivi/k8s/staging/src/k8s.io/controller-manager
-
-replace k8s.io/dynamic-resource-allocation => /home/molivi/k8s/staging/src/k8s.io/dynamic-resource-allocation
-
-replace k8s.io/csi-translation-lib => /home/molivi/k8s/staging/src/k8s.io/csi-translation-lib
-
-replace k8s.io/cri-api => /home/molivi/k8s/staging/src/k8s.io/cri-api
-
-replace k8s.io/cri-client => /home/molivi/k8s/staging/src/k8s.io/cri-client
+	k8s.io/api => /home/molivi/k8s/staging/src/k8s.io/api
+	k8s.io/apiextensions-apiserver => /home/molivi/k8s/staging/src/k8s.io/apiextensions-apiserver
+	k8s.io/apimachinery => /home/molivi/k8s/staging/src/k8s.io/apimachinery
+	k8s.io/apiserver => /home/molivi/k8s/staging/src/k8s.io/apiserver
+	k8s.io/cli-runtime => /home/molivi/k8s/staging/src/k8s.io/cli-runtime
+	k8s.io/client-go => /home/molivi/k8s/staging/src/k8s.io/client-go
+	k8s.io/cloud-provider => /home/molivi/k8s/staging/src/k8s.io/cloud-provider
+	k8s.io/cluster-bootstrap => /home/molivi/k8s/staging/src/k8s.io/cluster-bootstrap
+	k8s.io/code-generator => /home/molivi/k8s/staging/src/k8s.io/code-generator
+	k8s.io/component-base => /home/molivi/k8s/staging/src/k8s.io/component-base
+	k8s.io/component-helpers => /home/molivi/k8s/staging/src/k8s.io/component-helpers
+	k8s.io/controller-manager => /home/molivi/k8s/staging/src/k8s.io/controller-manager
+	k8s.io/cri-api => /home/molivi/k8s/staging/src/k8s.io/cri-api
+	k8s.io/cri-client => /home/molivi/k8s/staging/src/k8s.io/cri-client
+	k8s.io/csi-translation-lib => /home/molivi/k8s/staging/src/k8s.io/csi-translation-lib
+	k8s.io/dynamic-resource-allocation => /home/molivi/k8s/staging/src/k8s.io/dynamic-resource-allocation
+	k8s.io/kube-controller-manager => /home/molivi/k8s/staging/src/k8s.io/kube-controller-manager
+	k8s.io/kube-proxy => /home/molivi/k8s/staging/src/k8s.io/kube-proxy
+	k8s.io/kube-scheduler => /home/molivi/k8s/staging/src/k8s.io/kube-scheduler
+	k8s.io/kubectl => /home/molivi/k8s/staging/src/k8s.io/kubectl
+	k8s.io/kubelet => /home/molivi/k8s/staging/src/k8s.io/kubelet
+	k8s.io/kubernetes => /home/molivi/k8s/
+	k8s.io/metrics => /home/molivi/k8s/staging/src/k8s.io/metrics
+	k8s.io/mount-utils => /home/molivi/k8s/staging/src/k8s.io/mount-utils
+	k8s.io/pod-security-admission => /home/molivi/k8s/staging/src/k8s.io/pod-security-admission
+	k8s.io/sample-apiserver => /home/molivi/k8s/staging/src/k8s.io/sample-apiserver
+	k8s.io/sample-cli-plugin => /home/molivi/k8s/staging/src/k8s.io/sample-cli-plugin
+	k8s.io/sample-controller => /home/molivi/k8s/staging/src/k8s.io/sample-controller
+)
