@@ -15,7 +15,7 @@ import (
 	clientsetfake "k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/tools/events"
 	"k8s.io/kubernetes/pkg/scheduler"
-	schedulerapi "k8s.io/kubernetes/pkg/scheduler/apis/config"
+	schedcfg "k8s.io/kubernetes/pkg/scheduler/apis/config"
 	"k8s.io/kubernetes/pkg/scheduler/profile"
 )
 
@@ -61,31 +61,35 @@ func newSchedulerOrDie(numNodes uint32, hostMilliCPUs, hostBytes int64) *schedul
 			// experiments pods only request CPUs and memory, not storage, so we disable all plugins
 			// dealing with storage volumes are disabled. QueueSort and Bind plugins we actually
 			// don't need, but scheduler.New(...) fails without them.
-			schedulerapi.KubeSchedulerProfile{SchedulerName: miniDefaultK8sScheduler,
-				Plugins: &schedulerapi.Plugins{
-					QueueSort: schedulerapi.PluginSet{Enabled: []schedulerapi.Plugin{{Name: "PrioritySort"}}},
-					Bind:      schedulerapi.PluginSet{Enabled: []schedulerapi.Plugin{{Name: "DefaultBinder"}}},
-					PreFilter: schedulerapi.PluginSet{Enabled: []schedulerapi.Plugin{{Name: "NodeResourcesFit"}}},
-					Filter:    schedulerapi.PluginSet{Enabled: []schedulerapi.Plugin{{Name: "NodeResourcesFit"}}},
-					Score: schedulerapi.PluginSet{Enabled: []schedulerapi.Plugin{
+			schedcfg.KubeSchedulerProfile{SchedulerName: miniDefaultK8sScheduler,
+				Plugins: &schedcfg.Plugins{
+					QueueSort: schedcfg.PluginSet{Enabled: []schedcfg.Plugin{{Name: "PrioritySort"}}},
+					Bind:      schedcfg.PluginSet{Enabled: []schedcfg.Plugin{{Name: "DefaultBinder"}}},
+					PreFilter: schedcfg.PluginSet{Enabled: []schedcfg.Plugin{{Name: "NodeResourcesFit"}}},
+					Filter:    schedcfg.PluginSet{Enabled: []schedcfg.Plugin{{Name: "NodeResourcesFit"}}},
+					Score: schedcfg.PluginSet{Enabled: []schedcfg.Plugin{
 						{Name: "NodeResourcesFit"},
 						{Name: "NodeResourcesBalancedAllocation"},
 					}},
 				},
-				PluginConfig: []schedulerapi.PluginConfig{
+				PluginConfig: []schedcfg.PluginConfig{
 					{
 						Name: "NodeResourcesFit",
-						Args: &schedulerapi.NodeResourcesFitArgs{
-							ScoringStrategy: &schedulerapi.ScoringStrategy{
+						Args: &schedcfg.NodeResourcesFitArgs{
+							ScoringStrategy: &schedcfg.ScoringStrategy{
 								// TODO: make the actual policy pluggable.
-								Type: schedulerapi.LeastAllocated,
+								Type: schedcfg.LeastAllocated,
+								Resources: []schedcfg.ResourceSpec{
+									{Name: "cpu", Weight: 1},
+									{Name: "memory", Weight: 1},
+								},
 							},
 						},
 					},
 					{
 						Name: "NodeResourcesBalancedAllocation",
-						Args: &schedulerapi.NodeResourcesBalancedAllocationArgs{
-							Resources: []schedulerapi.ResourceSpec{
+						Args: &schedcfg.NodeResourcesBalancedAllocationArgs{
+							Resources: []schedcfg.ResourceSpec{
 								{Name: "cpu", Weight: 1},
 								{Name: "memory", Weight: 1},
 							},
