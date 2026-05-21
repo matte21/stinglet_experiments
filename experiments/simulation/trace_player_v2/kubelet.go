@@ -2,9 +2,14 @@
 
 package main
 
-import v1 "k8s.io/api/core/v1"
+import (
+	v1 "k8s.io/api/core/v1"
+	"k8s.io/kubernetes/pkg/kubelet/cm/topologymanager"
+)
 
-type stdKubelet struct{}
+type stdKubelet struct {
+	topoMgr topologymanager.Manager
+}
 
 var _ hostAgent = &stdKubelet{}
 
