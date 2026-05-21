@@ -59,15 +59,38 @@ func newSchedulerOrDie(numNodes uint32, hostMilliCPUs, hostBytes int64) *schedul
 			// "default" K8s scheduler, i.e., enable all default plugins. Note that we don't
 			// actually pass all default plugins, because some are out of scope. i.e. in our
 			// experiments pods only request CPUs and memory, not storage, so we disable all plugins
-			// dealing with storage volumes are disabled.
+			// dealing with storage volumes are disabled. QueueSort and Bind plugins we actually
+			// don't need, but scheduler.New(...) fails without them.
 			schedulerapi.KubeSchedulerProfile{SchedulerName: miniDefaultK8sScheduler,
 				Plugins: &schedulerapi.Plugins{
+					QueueSort: schedulerapi.PluginSet{Enabled: []schedulerapi.Plugin{{Name: "PrioritySort"}}},
+					Bind:      schedulerapi.PluginSet{Enabled: []schedulerapi.Plugin{{Name: "DefaultBinder"}}},
 					PreFilter: schedulerapi.PluginSet{Enabled: []schedulerapi.Plugin{{Name: "NodeResourcesFit"}}},
 					Filter:    schedulerapi.PluginSet{Enabled: []schedulerapi.Plugin{{Name: "NodeResourcesFit"}}},
 					Score: schedulerapi.PluginSet{Enabled: []schedulerapi.Plugin{
 						{Name: "NodeResourcesFit"},
 						{Name: "NodeResourcesBalancedAllocation"},
 					}},
+				},
+				PluginConfig: []schedulerapi.PluginConfig{
+					{
+						Name: "NodeResourcesFit",
+						Args: &schedulerapi.NodeResourcesFitArgs{
+							ScoringStrategy: &schedulerapi.ScoringStrategy{
+								// TODO: make the actual policy pluggable.
+								Type: schedulerapi.LeastAllocated,
+							},
+						},
+					},
+					{
+						Name: "NodeResourcesBalancedAllocation",
+						Args: &schedulerapi.NodeResourcesBalancedAllocationArgs{
+							Resources: []schedulerapi.ResourceSpec{
+								{Name: "cpu", Weight: 1},
+								{Name: "memory", Weight: 1},
+							},
+						},
+					},
 				},
 			},
 		),
