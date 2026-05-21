@@ -27,6 +27,10 @@ const miniDefaultK8sScheduler = "mini-default-k8s-sched"
 
 var Version = "dev"
 
+type hostAgent interface {
+	Admit(*v1.Pod) error
+}
+
 func main() {
 	log.Printf("Running %s\n", Version)
 
@@ -34,6 +38,8 @@ func main() {
 
 	testCase1(s)
 	//testCase2(s)
+
+	_ = newHostAgent()
 }
 
 func newSchedulerOrDie(numNodes uint32, hostBytes, hostMilliCPUs int64) *scheduler.Scheduler {

@@ -2,8 +2,16 @@
 
 package main
 
-import "fmt"
+import v1 "k8s.io/api/core/v1"
 
-func foo() {
-	fmt.Println("kubelet")
+type stdKubelet struct{}
+
+var _ hostAgent = &stdKubelet{}
+
+func (s *stdKubelet) Admit(*v1.Pod) error {
+	panic("unimplemented")
+}
+
+func newHostAgent() *stdKubelet {
+	return &stdKubelet{}
 }
