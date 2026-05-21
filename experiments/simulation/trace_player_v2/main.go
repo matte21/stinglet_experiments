@@ -14,6 +14,7 @@ import (
 	"k8s.io/client-go/informers"
 	clientsetfake "k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/tools/events"
+	"k8s.io/klog/v2"
 	"k8s.io/kubernetes/pkg/scheduler"
 	schedcfg "k8s.io/kubernetes/pkg/scheduler/apis/config"
 	"k8s.io/kubernetes/pkg/scheduler/profile"
@@ -31,11 +32,11 @@ func main() {
 
 	s := newSchedulerOrDie(2, (1 << 33), 64*1000)
 
-	p := newPod("pod-1", 4, 32, true)
-	s.SimSchedulePod(context.Background(), p)
+	testCase1(s)
+	//testCase2(s)
 }
 
-func newSchedulerOrDie(numNodes uint32, hostMilliCPUs, hostBytes int64) *scheduler.Scheduler {
+func newSchedulerOrDie(numNodes uint32, hostBytes, hostMilliCPUs int64) *scheduler.Scheduler {
 	ctx := context.Background()
 
 	// Load default namespace and cluster nodes in the scheduler in-memory view of the cluster.
@@ -126,6 +127,7 @@ func newHost(name string, bytes, milliCPUs int64) *v1.Node {
 			Allocatable: v1.ResourceList{
 				v1.ResourceCPU:    *resource.NewMilliQuantity(milliCPUs, resource.DecimalSI),
 				v1.ResourceMemory: *resource.NewQuantity(bytes, resource.BinarySI),
+				v1.ResourcePods:   *resource.NewQuantity(110, resource.DecimalSI),
 			},
 		},
 	}
@@ -177,4 +179,55 @@ func (n nopEventSink) Patch(_ context.Context, e *eventsv1.Event, _ []byte) (*ev
 
 func (n nopEventSink) Update(_ context.Context, e *eventsv1.Event) (*eventsv1.Event, error) {
 	return e, nil
+}
+
+// TODO: remove me.
+func testCase1(s *scheduler.Scheduler) {
+	allPods := []*v1.Pod{
+		newPod("pod-1", 4*(1<<30), 32, true),
+		newPod("pod-2", 4*(1<<30), 32, true),
+		newPod("pod-3", 5*(1<<30), 32, true),
+	}
+
+	for _, p := range allPods {
+		o, err := s.SimSchedulePod(context.Background(), p)
+		if err != nil {
+			log.Printf("Failed to schedule pod %s: %v\n", p.Name, err)
+			continue
+		}
+		log.Printf("Pod %s to %s\n", p.Name, o.SuggestedHost)
+		p.Spec.NodeName = o.SuggestedHost
+		s.Cache.AddPod(klog.Background(), p)
+	}
+
+	s.Cache.RemovePod(klog.Background(), allPods[0])
+
+	p := newPod("pod-4", 5*(1<<30), 32, true)
+	o, err := s.SimSchedulePod(context.Background(), p)
+	if err != nil {
+		log.Printf("Failed to schedule pod %s: %v\n", p.Name, err)
+		return
+	}
+	log.Printf("Pod %s to %s\n", p.Name, o.SuggestedHost)
+	p.Spec.NodeName = o.SuggestedHost
+	s.Cache.AddPod(klog.Background(), p)
+}
+
+// TODO: remove me.
+func testCase2(s *scheduler.Scheduler) {
+	allPods := []*v1.Pod{
+		newPod("pod-1", 2*(1<<30), 32, true),
+		newPod("pod-2", 2*(1<<30), 32, true),
+	}
+
+	for _, p := range allPods {
+		o, err := s.SimSchedulePod(context.Background(), p)
+		if err != nil {
+			log.Printf("Failed to schedule pod %s: %v\n", p.Name, err)
+			continue
+		}
+		log.Printf("Pod %s to %s\n", p.Name, o.SuggestedHost)
+		p.Spec.NodeName = o.SuggestedHost
+		s.Cache.AddPod(klog.Background(), p)
+	}
 }
