@@ -29,7 +29,10 @@ var Version = "dev"
 func main() {
 	log.Printf("Running %s\n", Version)
 
-	_ = newSchedulerOrDie(2, (1 << 33), 64*1000)
+	s := newSchedulerOrDie(2, (1 << 33), 64*1000)
+
+	p := newPod("pod-1", 4, 32, true)
+	s.SimSchedulePod(context.Background(), p)
 }
 
 func newSchedulerOrDie(numNodes uint32, hostMilliCPUs, hostBytes int64) *scheduler.Scheduler {
@@ -126,6 +129,35 @@ func newHost(name string, bytes, milliCPUs int64) *v1.Node {
 			},
 		},
 	}
+}
+
+// Note: CPUs unit is whole cores, not millicores.
+func newPod(name string, bytes, cpusCores int64, guaranteed bool) *v1.Pod {
+	p := &v1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: name,
+			UID:  types.UID(name),
+		},
+		Spec: v1.PodSpec{
+			SchedulerName: miniDefaultK8sScheduler,
+			Containers: []v1.Container{
+				{
+					Resources: v1.ResourceRequirements{
+						Requests: v1.ResourceList{
+							v1.ResourceCPU:    *resource.NewMilliQuantity(cpusCores*1000, resource.DecimalSI),
+							v1.ResourceMemory: *resource.NewQuantity(bytes, resource.BinarySI),
+						},
+					},
+				},
+			},
+		},
+	}
+
+	if guaranteed {
+		p.Spec.Containers[0].Resources.Limits = p.Spec.Containers[0].Resources.Requests.DeepCopy()
+	}
+
+	return p
 }
 
 var _ events.EventSink = nopEventSink{}
