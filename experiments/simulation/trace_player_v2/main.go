@@ -61,7 +61,8 @@ type simCfg struct {
 func main() {
 	log.Printf("Running %s\n", Version)
 
-	testCaseTopoParsingAndKubelets1()
+	//testCaseTopoParsingAndKubelets1()
+	testCaseTopoParsingAndKubelets2()
 
 	//testCaseTopoParsing1()
 	//testCaseTopoParsing2()
@@ -395,5 +396,40 @@ func testCaseTopoParsingAndKubelets1() {
 		fmt.Printf("agent rejected pod %s: %v\n", acceptedPod.Name, err)
 	} else {
 		fmt.Printf("agent accepted pod %s\n", acceptedPod.Name)
+	}
+}
+
+func testCaseTopoParsingAndKubelets2() {
+	sc := &simCfg{
+		numSockets:   2,
+		sncWays:      2,
+		cpusPerNNUMA: 32,
+		gibsPerNNUMA: 128,
+	}
+
+	t := generateTopology(sc)
+
+	agentDefault := newHostAgentOrDie(t, topologymanager.PolicyBestEffort, nil)
+	agentClose := newHostAgentOrDie(t, topologymanager.PolicyBestEffort, map[string]string{
+		topologymanager.PreferClosestNUMANodes: "true",
+	})
+
+	allPods := []*v1.Pod{
+		newPod("pod-1", int64(sc.gibsPerNNUMA-10)*(1<<30), 2, true),
+		newPod("pod-2", int64(sc.gibsPerNNUMA*2)*(1<<30), 2, true),
+	}
+
+	for _, p := range allPods {
+		if err := agentDefault.Admit(p); err != nil {
+			fmt.Printf("agent default rejected pod %s: %v\n", p.Name, err)
+		} else {
+			fmt.Printf("agent default accepted pod %s\n", p.Name)
+		}
+
+		if err := agentClose.Admit(p); err != nil {
+			fmt.Printf("agent close rejected pod %s: %v\n", p.Name, err)
+		} else {
+			fmt.Printf("agent close accepted pod %s\n", p.Name)
+		}
 	}
 }
