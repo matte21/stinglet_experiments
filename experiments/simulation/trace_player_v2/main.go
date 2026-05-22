@@ -34,7 +34,13 @@ type hostAgent interface {
 }
 
 // Note: currently we assume that SMT is enabled with two threads per core.
-const threadsPerCore = 2
+const (
+	threadsPerCore = 2
+	// The following values are taken from S4.
+	intraNUMADistance   = 10
+	intraSocketDistance = 12
+	outOfSocketDistance = 21
+)
 
 // Note: currently we assume that the interconnect between the Sockets is a full mesh.
 // We also assume 1 socket = 1 physical NUMA node.
@@ -262,6 +268,8 @@ func testCase2(s *scheduler.Scheduler) {
 	}
 }
 
+// NOTE: this code assumes the topology is either the one in VLAB, or the one in S4. It does not
+// generalize to arbitrary topologies.
 func generateTopology(cfg *simCfg) *cadvisorapi.MachineInfo {
 	// By "Cores" we mean physical cores, while cadvisor means hyperthreads.
 	numCores := cfg.numSockets * cfg.sncWays * cfg.cpusPerNNUMA / threadsPerCore
@@ -288,6 +296,21 @@ func generateTopology(cfg *simCfg) *cadvisorapi.MachineInfo {
 				Memory: perNNUMABytes,
 			}
 		}
+	}
+
+	// Set NUMA distances.
+	for i := range nodes {
+		d := make([]uint64, len(nodes))
+		for j := range nodes {
+			if j == i {
+				d[j] = intraNUMADistance
+			} else if nodes[i].Cores[0].SocketID == nodes[j].Cores[0].SocketID {
+				d[j] = intraSocketDistance
+			} else {
+				d[j] = outOfSocketDistance
+			}
+		}
+		nodes[i].Distances = d
 	}
 
 	return &cadvisorapi.MachineInfo{
