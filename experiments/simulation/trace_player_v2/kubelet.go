@@ -19,29 +19,44 @@ import (
 )
 
 type stdKubelet struct {
-	topoMgr topologymanager.Manager
-	cpuMgr  cpumanager.Manager
-	memMgr  memorymanager.Manager
+	topoMgr      topologymanager.Manager
+	cpuMgr       cpumanager.Manager
+	memMgr       memorymanager.Manager
+	admittedPods []*v1.Pod
 }
 
 var _ hostAgent = &stdKubelet{}
 
 // TODO: measure admit time!
+// Note: s takes ownership of p. Callers should no longer use p after this call.
 func (s *stdKubelet) Admit(p *v1.Pod) error {
 	res := s.topoMgr.Admit(&lifecycle.PodAdmitAttributes{
 		Pod: p,
 	})
 
-	if res.Admit {
-		return nil
+	if !res.Admit {
+		return fmt.Errorf("Pod rejected by agent. Reason: %s Message: %s", res.Reason, res.Message)
 	}
 
-	return fmt.Errorf("Pod rejected by agent. Reason: %s Message: %s", res.Reason, res.Message)
+	s.admittedPods = append(s.admittedPods, p)
+
+	return nil
+}
+
+func (s *stdKubelet) HandleDeparture(podName string) {
+	for i, p := range s.admittedPods {
+		if p.Name == podName {
+			s.admittedPods[i] = s.admittedPods[len(s.admittedPods)-1]
+			// Set to nil, otherwise the GC keeps it around.
+			s.admittedPods[len(s.admittedPods)-1] = nil
+			s.admittedPods = s.admittedPods[:len(s.admittedPods)-1]
+			return
+		}
+	}
 }
 
 func (s *stdKubelet) ActivePods() []*v1.Pod {
-	// TODO: implement me!
-	panic("unimplemented")
+	return s.admittedPods
 }
 
 func newHostAgentOrDie(mi *cadvisorapi.MachineInfo,
@@ -58,9 +73,10 @@ func newHostAgentOrDie(mi *cadvisorapi.MachineInfo,
 	tm.AddHintProvider(mm)
 
 	agent := &stdKubelet{
-		topoMgr: tm,
-		cpuMgr:  cm,
-		memMgr:  mm,
+		topoMgr:      tm,
+		cpuMgr:       cm,
+		memMgr:       mm,
+		admittedPods: make([]*v1.Pod, 0, 8),
 	}
 
 	if err := cpumanager.SimStart(cm, agent.ActivePods); err != nil {
