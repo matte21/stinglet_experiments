@@ -39,6 +39,11 @@ func (s *stdKubelet) Admit(p *v1.Pod) error {
 	return fmt.Errorf("Pod rejected by agent. Reason: %s Message: %s", res.Reason, res.Message)
 }
 
+func (s *stdKubelet) ActivePods() []*v1.Pod {
+	// TODO: implement me!
+	panic("unimplemented")
+}
+
 func newHostAgentOrDie(mi *cadvisorapi.MachineInfo,
 	topoMgrPolicy string, topoMgrPolicyOpts map[string]string) *stdKubelet {
 
@@ -52,11 +57,17 @@ func newHostAgentOrDie(mi *cadvisorapi.MachineInfo,
 	tm.AddHintProvider(cm)
 	tm.AddHintProvider(mm)
 
-	return &stdKubelet{
+	agent := &stdKubelet{
 		topoMgr: tm,
 		cpuMgr:  cm,
 		memMgr:  mm,
 	}
+
+	if err := memorymanager.SimStart(mm, agent.ActivePods); err != nil {
+		log.Fatalf("Failed to start memory manager: %v\n", err)
+	}
+
+	return agent
 }
 
 func newTopologyMgrOrDie(topology []cadvisorapi.Node, policy string,
