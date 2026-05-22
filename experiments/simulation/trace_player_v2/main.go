@@ -274,7 +274,7 @@ func testCase2(s *scheduler.Scheduler) {
 
 // NOTE: this code assumes the topology is either the one in VLAB, or the one in S4. It does not
 // generalize to arbitrary topologies.
-func generateTopology(cfg *simCfg) *cadvisorapi.MachineInfo {
+func generateMachineInfo(cfg *simCfg) *cadvisorapi.MachineInfo {
 	// By "Cores" we mean physical cores, while cadvisor means hyperthreads.
 	numCores := cfg.numSockets * cfg.sncWays * cfg.cpusPerNNUMA / threadsPerCore
 	nodes := make([]cadvisorapi.Node, cfg.numSockets*cfg.sncWays)
@@ -336,7 +336,7 @@ func testCaseTopoParsing1() {
 		gibsPerNNUMA: 256,
 	}
 
-	t := generateTopology(sc)
+	t := generateMachineInfo(sc)
 
 	fmt.Println(t)
 }
@@ -350,7 +350,7 @@ func testCaseTopoParsing2() {
 		gibsPerNNUMA: 128,
 	}
 
-	t := generateTopology(sc)
+	t := generateMachineInfo(sc)
 
 	fmt.Println(t)
 }
@@ -363,7 +363,7 @@ func testCaseTopoParsingAndKubelets1() {
 		gibsPerNNUMA: 128,
 	}
 
-	t := generateTopology(sc)
+	t := generateMachineInfo(sc)
 
 	agent := newHostAgentOrDie(t, topologymanager.PolicyBestEffort, nil)
 
@@ -407,7 +407,7 @@ func testCaseTopoParsingAndKubelets2() {
 		gibsPerNNUMA: 128,
 	}
 
-	t := generateTopology(sc)
+	t := generateMachineInfo(sc)
 
 	agentDefault := newHostAgentOrDie(t, topologymanager.PolicyBestEffort, nil)
 	agentClose := newHostAgentOrDie(t, topologymanager.PolicyBestEffort, map[string]string{
