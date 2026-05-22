@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 
+	cadvisorapi "github.com/google/cadvisor/info/v1"
 	v1 "k8s.io/api/core/v1"
 	eventsv1 "k8s.io/api/events/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -32,14 +33,36 @@ type hostAgent interface {
 	HandleDeparture(podName string)
 }
 
+// Note: currently we assume that SMT is enabled with two threads per core.
+const threadsPerCore = 2
+
+// Note: currently we assume that the interconnect between the Sockets is a full mesh.
+// We also assume 1 socket = 1 physical NUMA node.
+type simCfg struct {
+	numSockets int
+	sncWays    int
+
+	// if sncWays = 1, this is the # of CPUs on a physical NUMA node. If sncWays > 1, this is the
+	// number of CPUs on a logical nNUMA, i.e. a sub NUMA cluster.
+	cpusPerNNUMA int
+
+	// if sncWays = 1, this is the # of GiBs on a physical NUMA node. If sncWays > 1, this is the
+	// number of GiBs on a logical nNUMA, i.e. a subNUMA.
+	gibsPerNNUMA int
+}
+
 func main() {
 	log.Printf("Running %s\n", Version)
 
-	s := newSchedulerOrDie(2, (1 << 33), 64*1000)
+	//testCaseTopoParsing1()
+	testCaseTopoParsing2()
 
-	testCase1(s)
+	//! rm when done
+	// s := newSchedulerOrDie(2, (1 << 33), 64*1000)
+	// testCase1(s)
 	//testCase2(s)
 
+	//! rm when done
 	//_ = newHostAgent()
 }
 
@@ -237,4 +260,70 @@ func testCase2(s *scheduler.Scheduler) {
 		p.Spec.NodeName = o.SuggestedHost
 		s.Cache.AddPod(klog.Background(), p)
 	}
+}
+
+func generateTopology(cfg *simCfg) *cadvisorapi.MachineInfo {
+	// By "Cores" we mean physical cores, while cadvisor means hyperthreads.
+	numCores := cfg.numSockets * cfg.sncWays * cfg.cpusPerNNUMA / threadsPerCore
+	nodes := make([]cadvisorapi.Node, cfg.numSockets*cfg.sncWays)
+
+	perNNUMABytes := uint64(cfg.gibsPerNNUMA) * (1 << 30)
+
+	// sockID and nodeID are global, while coreID and thdID are per-node and per-core, respectively.
+	for sockID := range cfg.numSockets {
+		for i := range cfg.sncWays {
+			nodeID := sockID*cfg.sncWays + i
+			cores := make([]cadvisorapi.Core, cfg.cpusPerNNUMA/threadsPerCore)
+			for coreID := range cores {
+				cores[coreID].Id = coreID
+				cores[coreID].SocketID = sockID
+				cores[coreID].Threads = make([]int, threadsPerCore)
+				for thdID := range threadsPerCore {
+					cores[coreID].Threads[thdID] = nodeID*len(cores) + coreID + thdID*numCores
+				}
+			}
+			nodes[nodeID] = cadvisorapi.Node{
+				Id:     nodeID,
+				Cores:  cores,
+				Memory: perNNUMABytes,
+			}
+		}
+	}
+
+	return &cadvisorapi.MachineInfo{
+		Topology:         nodes,
+		NumSockets:       cfg.numSockets,
+		NumPhysicalCores: numCores,
+		// cadvisor confusingly uses "cores" to mean "threads" here.
+		NumCores:       numCores * threadsPerCore,
+		MemoryCapacity: uint64(len(nodes)) * perNNUMABytes,
+	}
+}
+
+// TODO: rm me.
+func testCaseTopoParsing1() {
+	sc := &simCfg{
+		numSockets:   2,
+		sncWays:      1,
+		cpusPerNNUMA: 64,
+		gibsPerNNUMA: 256,
+	}
+
+	t := generateTopology(sc)
+
+	fmt.Println(t)
+}
+
+// TODO: rm me.
+func testCaseTopoParsing2() {
+	sc := &simCfg{
+		numSockets:   2,
+		sncWays:      2,
+		cpusPerNNUMA: 32,
+		gibsPerNNUMA: 128,
+	}
+
+	t := generateTopology(sc)
+
+	fmt.Println(t)
 }
