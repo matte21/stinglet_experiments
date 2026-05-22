@@ -39,7 +39,7 @@ func main() {
 	testCase1(s)
 	//testCase2(s)
 
-	_ = newHostAgent()
+	//_ = newHostAgent()
 }
 
 func newSchedulerOrDie(numNodes uint32, hostBytes, hostMilliCPUs int64) *scheduler.Scheduler {
