@@ -16,6 +16,7 @@ import (
 	clientsetfake "k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/tools/events"
 	"k8s.io/klog/v2"
+	"k8s.io/kubernetes/pkg/kubelet/cm/topologymanager"
 	"k8s.io/kubernetes/pkg/scheduler"
 	schedcfg "k8s.io/kubernetes/pkg/scheduler/apis/config"
 	"k8s.io/kubernetes/pkg/scheduler/profile"
@@ -60,8 +61,10 @@ type simCfg struct {
 func main() {
 	log.Printf("Running %s\n", Version)
 
+	testCaseTopoParsingAndKubelets1()
+
 	//testCaseTopoParsing1()
-	testCaseTopoParsing2()
+	//testCaseTopoParsing2()
 
 	//! rm when done
 	// s := newSchedulerOrDie(2, (1 << 33), 64*1000)
@@ -349,4 +352,48 @@ func testCaseTopoParsing2() {
 	t := generateTopology(sc)
 
 	fmt.Println(t)
+}
+
+func testCaseTopoParsingAndKubelets1() {
+	sc := &simCfg{
+		numSockets:   2,
+		sncWays:      2,
+		cpusPerNNUMA: 32,
+		gibsPerNNUMA: 128,
+	}
+
+	t := generateTopology(sc)
+
+	agent := newHostAgentOrDie(t, topologymanager.PolicyBestEffort, nil)
+
+	allPods := []*v1.Pod{
+		newPod("pod-1", int64((sc.gibsPerNNUMA*3)/4)*(1<<30), 2, true),
+		newPod("pod-2", int64((sc.gibsPerNNUMA*3)/4)*(1<<30), 2, true),
+		newPod("pod-3", int64((sc.gibsPerNNUMA*3)/4)*(1<<30), 2, true),
+		newPod("pod-4", int64((sc.gibsPerNNUMA*3)/4)*(1<<30), 2, true),
+	}
+
+	for _, p := range allPods {
+		if err := agent.Admit(p); err != nil {
+			fmt.Printf("agent rejected pod %s: %v\n", p.Name, err)
+		} else {
+			fmt.Printf("agent accepted pod %s\n", p.Name)
+		}
+	}
+
+	rejectPod := newPod("pod-5", int64(sc.gibsPerNNUMA/2)*(1<<30), 2, true)
+	if err := agent.Admit(rejectPod); err != nil {
+		fmt.Printf("agent rejected pod %s: %v\n", rejectPod.Name, err)
+	} else {
+		fmt.Printf("agent accepted pod %s\n", rejectPod.Name)
+	}
+
+	agent.HandleDeparture("pod-1")
+
+	acceptedPod := newPod("pod-6", int64(sc.gibsPerNNUMA/2)*(1<<30), 2, true)
+	if err := agent.Admit(acceptedPod); err != nil {
+		fmt.Printf("agent rejected pod %s: %v\n", acceptedPod.Name, err)
+	} else {
+		fmt.Printf("agent accepted pod %s\n", acceptedPod.Name)
+	}
 }
