@@ -29,6 +29,7 @@ var Version = "dev"
 
 type hostAgent interface {
 	Admit(*v1.Pod) error
+	HandleDeparture(podName string)
 }
 
 func main() {
