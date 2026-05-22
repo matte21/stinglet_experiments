@@ -63,6 +63,9 @@ func newHostAgentOrDie(mi *cadvisorapi.MachineInfo,
 		memMgr:  mm,
 	}
 
+	if err := cpumanager.SimStart(cm, agent.ActivePods); err != nil {
+		log.Fatalf("Failed to start cpu manager: %v\n", err)
+	}
 	if err := memorymanager.SimStart(mm, agent.ActivePods); err != nil {
 		log.Fatalf("Failed to start memory manager: %v\n", err)
 	}
