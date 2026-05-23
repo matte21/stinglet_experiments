@@ -17,7 +17,8 @@ import (
 )
 
 type stinglet struct {
-	mgr *farmemtopologymanager.Manager
+	mgr          *farmemtopologymanager.Manager
+	admittedPods []*v1.Pod
 }
 
 var _ hostAgent = &stinglet{}
@@ -31,11 +32,25 @@ func (s *stinglet) Admit(p *v1.Pod) error {
 		return fmt.Errorf("Pod rejected by agent. Reason: %s Message: %s", res.Reason, res.Message)
 	}
 
+	s.admittedPods = append(s.admittedPods, p)
+
 	return nil
 }
 
-func (s *stinglet) HandleDeparture(podName string) {
-	panic("unimplemented!")
+func (s *stinglet) HandleDeparture(podName string) error {
+	for i, p := range s.admittedPods {
+		if p.Name == podName {
+			if err := s.mgr.SimRemoveContainer(string(p.UID), p.Spec.Containers[0].Name); err != nil {
+				return fmt.Errorf("failed to remove pod %s: %v", podName, err)
+			}
+			s.admittedPods[i] = s.admittedPods[len(s.admittedPods)-1]
+			// Set to nil, otherwise the GC keeps it around.
+			s.admittedPods[len(s.admittedPods)-1] = nil
+			s.admittedPods = s.admittedPods[:len(s.admittedPods)-1]
+			return nil
+		}
+	}
+	return nil
 }
 
 func newHostAgentOrDie(mi *cadvisorapi.MachineInfo, _ string, _ map[string]string) *stinglet {
@@ -65,6 +80,7 @@ func newHostAgentOrDie(mi *cadvisorapi.MachineInfo, _ string, _ map[string]strin
 	}
 
 	return &stinglet{
-		mgr: m,
+		mgr:          m,
+		admittedPods: make([]*v1.Pod, 0, 8),
 	}
 }
