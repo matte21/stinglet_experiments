@@ -61,8 +61,8 @@ type simCfg struct {
 func main() {
 	log.Printf("Running %s\n", Version)
 
-	//testCaseTopoParsingAndKubelets1()
-	testCaseTopoParsingAndKubelets2()
+	testCaseTopoParsingAndKubelets1()
+	//testCaseTopoParsingAndKubelets2()
 
 	//testCaseTopoParsing1()
 	//testCaseTopoParsing2()

@@ -35,6 +35,10 @@ func (s *stdKubelet) Admit(p *v1.Pod) error {
 	})
 
 	if !res.Admit {
+		// In some cases the topology manager registers containers even for pods that end up being
+		// rejected - so we remove the container just to make sure and avoid leaking containers
+		// (note that the removal is idempotent).
+		topologymanager.SimRemoveContainer(s.topoMgr, string(p.UID), p.Spec.Containers[0].Name)
 		return fmt.Errorf("Pod rejected by agent. Reason: %s Message: %s", res.Reason, res.Message)
 	}
 
@@ -46,6 +50,7 @@ func (s *stdKubelet) Admit(p *v1.Pod) error {
 func (s *stdKubelet) HandleDeparture(podName string) error {
 	for i, p := range s.admittedPods {
 		if p.Name == podName {
+			topologymanager.SimRemoveContainer(s.topoMgr, string(p.UID), p.Spec.Containers[0].Name)
 			s.admittedPods[i] = s.admittedPods[len(s.admittedPods)-1]
 			// Set to nil, otherwise the GC keeps it around.
 			s.admittedPods[len(s.admittedPods)-1] = nil
