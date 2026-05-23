@@ -43,16 +43,17 @@ func (s *stdKubelet) Admit(p *v1.Pod) error {
 	return nil
 }
 
-func (s *stdKubelet) HandleDeparture(podName string) {
+func (s *stdKubelet) HandleDeparture(podName string) error {
 	for i, p := range s.admittedPods {
 		if p.Name == podName {
 			s.admittedPods[i] = s.admittedPods[len(s.admittedPods)-1]
 			// Set to nil, otherwise the GC keeps it around.
 			s.admittedPods[len(s.admittedPods)-1] = nil
 			s.admittedPods = s.admittedPods[:len(s.admittedPods)-1]
-			return
+			return nil
 		}
 	}
+	return nil
 }
 
 func (s *stdKubelet) ActivePods() []*v1.Pod {

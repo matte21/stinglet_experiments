@@ -31,7 +31,7 @@ var Version = "dev"
 
 type hostAgent interface {
 	Admit(*v1.Pod) error
-	HandleDeparture(podName string)
+	HandleDeparture(podName string) error
 }
 
 // Note: currently we assume that SMT is enabled with two threads per core.
