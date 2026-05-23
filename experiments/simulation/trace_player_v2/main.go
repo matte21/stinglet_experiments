@@ -61,7 +61,8 @@ type simCfg struct {
 func main() {
 	log.Printf("Running %s\n", Version)
 
-	testCaseTopoParsingAndKubelets1()
+	testCaseTopoParsingAndStinglet2()
+	//testCaseTopoParsingAndKubelets1()
 	//testCaseTopoParsingAndKubelets2()
 
 	//testCaseTopoParsing1()
@@ -355,6 +356,7 @@ func testCaseTopoParsing2() {
 	fmt.Println(t)
 }
 
+// TODO: rm me.
 func testCaseTopoParsingAndKubelets1() {
 	sc := &simCfg{
 		numSockets:   2,
@@ -399,6 +401,7 @@ func testCaseTopoParsingAndKubelets1() {
 	}
 }
 
+// TODO: rm me.
 func testCaseTopoParsingAndKubelets2() {
 	sc := &simCfg{
 		numSockets:   2,
@@ -432,4 +435,73 @@ func testCaseTopoParsingAndKubelets2() {
 			fmt.Printf("agent close accepted pod %s\n", p.Name)
 		}
 	}
+}
+
+// TODO: rm me.
+func testCaseTopoParsingAndStinglet1() {
+	sc := &simCfg{
+		numSockets:   2,
+		sncWays:      2,
+		cpusPerNNUMA: 32,
+		gibsPerNNUMA: 128,
+	}
+
+	t := generateMachineInfo(sc)
+
+	agent := newHostAgentOrDie(t, "", nil)
+
+	allPods := []*v1.Pod{
+		newPod("pod-1", int64((sc.gibsPerNNUMA*3)/4)*(1<<30), 2, true),
+		newPod("pod-2", int64((sc.gibsPerNNUMA*3)/4)*(1<<30), 2, true),
+		newPod("pod-3", int64((sc.gibsPerNNUMA*3)/4)*(1<<30), 2, true),
+		newPod("pod-4", int64((sc.gibsPerNNUMA*3)/4)*(1<<30), 2, true),
+		newPod("pod-5", int64((sc.gibsPerNNUMA*3)/4-5)*(1<<30), 2, true),
+	}
+
+	for _, p := range allPods {
+		if err := agent.Admit(p); err != nil {
+			fmt.Printf("agent rejected pod %s: %v\n", p.Name, err)
+		} else {
+			fmt.Printf("agent accepted pod %s\n", p.Name)
+		}
+	}
+
+	fmt.Println("foo")
+}
+
+// TODO: rm me.
+func testCaseTopoParsingAndStinglet2() {
+	sc := &simCfg{
+		numSockets:   2,
+		sncWays:      2,
+		cpusPerNNUMA: 32,
+		gibsPerNNUMA: 128,
+	}
+
+	t := generateMachineInfo(sc)
+
+	agent := newHostAgentOrDie(t, "", nil)
+
+	allPods := []*v1.Pod{
+		newPod("pod-1", int64((sc.gibsPerNNUMA*3)/4)*(1<<30), 2, true),
+		newPod("pod-2", int64((sc.gibsPerNNUMA*3)/4)*(1<<30), 2, true),
+		newPod("pod-3", int64(sc.gibsPerNNUMA*2)*(1<<30), 2, true),
+	}
+
+	for _, p := range allPods {
+		if err := agent.Admit(p); err != nil {
+			fmt.Printf("agent rejected pod %s: %v\n", p.Name, err)
+		} else {
+			fmt.Printf("agent accepted pod %s\n", p.Name)
+		}
+	}
+
+	for _, p := range allPods {
+		if err := agent.HandleDeparture(p.Name); err != nil {
+			fmt.Printf("agent failed to delete pod %s: %v\n", p.Name, err)
+		} else {
+			fmt.Printf("agent deleted pod %s\n", p.Name)
+		}
+	}
+
 }
