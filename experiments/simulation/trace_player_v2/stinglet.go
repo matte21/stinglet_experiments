@@ -33,6 +33,7 @@ func (s *stinglet) Admit(p *v1.Pod) error {
 	}
 
 	s.admittedPods = append(s.admittedPods, p)
+	s.mgr.AddContainer(p, p.Spec.Containers[0], p.Name+"/"+p.Spec.Containers[0].Name)
 
 	return nil
 }
