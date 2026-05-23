@@ -65,7 +65,9 @@ func newHostAgentOrDie(mi *cadvisorapi.MachineInfo, _ string, _ map[string]strin
 		{
 			// We assume there's at least one NUMA node, and that it has index 0.
 			NumaNode: 0,
-			Limits:   reservations,
+			Limits: v1.ResourceList{
+				v1.ResourceMemory: *resource.NewQuantity(resMemory4KiB, resource.DecimalSI),
+			},
 		},
 	}
 
