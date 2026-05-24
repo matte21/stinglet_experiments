@@ -9,11 +9,15 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-type clusterCfg struct {
+type clusterSpec struct {
 	NumHosts int `yaml:"numberOfHosts"`
 	// "LeastAllocated" or "MostAllocated"
 	SchedulingAlgo string `yaml:"schedulingAlgorithm"`
-	MachineID      int    `yaml:"machineId"`
+}
+
+type clusterCfg struct {
+	Specs     []clusterSpec `yaml:"specs"`
+	MachineID int           `yaml:"machineId"`
 }
 
 // Note: currently we assume that the interconnect between the Sockets is a full mesh.
@@ -86,13 +90,18 @@ func validateCfg(c *cfg) error {
 	}
 
 	for _, cl := range c.Clusters {
-		if cl.NumHosts <= 0 {
-			return fmt.Errorf("cluster machineId=%d: numberOfHosts must be > 0", cl.MachineID)
+		if len(cl.Specs) == 0 {
+			return fmt.Errorf("each cluster must have at least one spec (scheduling algorithm + number of hosts), cluster machineId=%d has none", cl.MachineID)
 		}
-		schedAlgo := strings.ToLower(strings.TrimSpace(cl.SchedulingAlgo))
-		if schedAlgo != "leastallocated" && schedAlgo != "mostallocated" {
-			return fmt.Errorf("cluster machineId=%d: unknown schedulingAlgorithm %q, "+
-				"must be LeastAllocated or MostAllocated", cl.MachineID, cl.SchedulingAlgo)
+		for i, s := range cl.Specs {
+			if s.NumHosts <= 0 {
+				return fmt.Errorf("cluster machineId=%d, spec=%d: numberOfHosts must be > 0", cl.MachineID, i)
+			}
+			schedAlgo := strings.ToLower(strings.TrimSpace(s.SchedulingAlgo))
+			if schedAlgo != "leastallocated" && schedAlgo != "mostallocated" {
+				return fmt.Errorf("cluster machineId=%d, spec=%d: unknown schedulingAlgorithm %q, "+
+					"must be LeastAllocated or MostAllocated", cl.MachineID, i, s.SchedulingAlgo)
+			}
 		}
 	}
 
