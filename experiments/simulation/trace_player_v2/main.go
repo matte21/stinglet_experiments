@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"log"
 	"strings"
@@ -20,6 +21,7 @@ import (
 	"k8s.io/kubernetes/pkg/scheduler"
 	schedcfg "k8s.io/kubernetes/pkg/scheduler/apis/config"
 	"k8s.io/kubernetes/pkg/scheduler/profile"
+	_ "modernc.org/sqlite"
 )
 
 // TODO: consider using a context with cancel for the scheduler since we plan to reuse the
@@ -48,8 +50,28 @@ func main() {
 
 	parseFlagsOrDie()
 
-	parseCfgOrDie(*cfgFile)
+	cfg := parseCfgOrDie(*cfgFile)
 
+	_, closeConnFunc := connectToTraceDBOrDie(*traceDBFile, len(cfg.Clusters))
+	defer closeConnFunc()
+}
+
+func connectToTraceDBOrDie(dbFile string, numConns int) (*sql.DB, func()) {
+	db, err := sql.Open("sqlite", "file:"+dbFile+"?mode=ro")
+	if err != nil {
+		log.Fatalf("Fatal: failed to open sqlite DB file %s storing the trace: %v", dbFile, err)
+	}
+
+	db.SetMaxOpenConns(numConns)
+	db.SetMaxIdleConns(numConns)
+
+	closeDB := func() {
+		if err := db.Close(); err != nil {
+			log.Printf("Failed to close sqlite DB file %s storing the trace: %v\n", dbFile, err)
+		}
+	}
+
+	return db, closeDB
 }
 
 // func main() {
