@@ -61,23 +61,28 @@ type simCfg struct {
 
 func main() {
 	log.Printf("Running %s\n", Version)
-
-	//testCaseTopoParsingAndStinglet2()
-	//testCaseTopoParsingAndKubelets1()
-	//testCaseTopoParsingAndKubelets2()
-
-	//testCaseTopoParsing1()
-	//testCaseTopoParsing2()
-
-	//! rm when done
-	s := newSchedulerOrDie(2, (1 << 33), 64*1000, "MostAllocated")
-	//s := newSchedulerOrDie(2, (1 << 33), 64*1000, "LeastAllocated")
-	testCase1(s)
-	//testCase2(s)
-
-	//! rm when done
-	//_ = newHostAgent()
+	
 }
+
+// func main() {
+// 	log.Printf("Running %s\n", Version)
+
+// 	//testCaseTopoParsingAndStinglet2()
+// 	//testCaseTopoParsingAndKubelets1()
+// 	//testCaseTopoParsingAndKubelets2()
+
+// 	//testCaseTopoParsing1()
+// 	//testCaseTopoParsing2()
+
+// 	//! rm when done
+// 	s := newSchedulerOrDie(2, (1 << 33), 64*1000, "MostAllocated")
+// 	//s := newSchedulerOrDie(2, (1 << 33), 64*1000, "LeastAllocated")
+// 	testCase1(s)
+// 	//testCase2(s)
+
+// 	//! rm when done
+// 	//_ = newHostAgent()
+// }
 
 func newSchedulerOrDie(numHosts uint32, hostBytes, hostMilliCPUs int64, fitStrategy string) *scheduler.Scheduler {
 	var fitStrategyType schedcfg.ScoringStrategyType
