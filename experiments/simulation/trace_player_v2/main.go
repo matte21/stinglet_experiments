@@ -113,8 +113,8 @@ func newSchedulerOrDie(numNodes uint32, hostBytes, hostMilliCPUs int64) *schedul
 					PreFilter: schedcfg.PluginSet{Enabled: []schedcfg.Plugin{{Name: "NodeResourcesFit"}}},
 					Filter:    schedcfg.PluginSet{Enabled: []schedcfg.Plugin{{Name: "NodeResourcesFit"}}},
 					Score: schedcfg.PluginSet{Enabled: []schedcfg.Plugin{
-						{Name: "NodeResourcesFit"},
-						{Name: "NodeResourcesBalancedAllocation"},
+						{Name: "NodeResourcesFit", Weight: 1},
+						{Name: "NodeResourcesBalancedAllocation", Weight: 1},
 					}},
 				},
 				PluginConfig: []schedcfg.PluginConfig{
