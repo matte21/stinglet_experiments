@@ -1,5 +1,14 @@
 package main
 
+import (
+	"fmt"
+	"log"
+	"os"
+	"strings"
+
+	"gopkg.in/yaml.v3"
+)
+
 type clusterCfg struct {
 	NumHosts int `yaml:"numberOfHosts"`
 	// "LeastAllocated" or "MostAllocated"
@@ -10,8 +19,9 @@ type clusterCfg struct {
 // Note: currently we assume that the interconnect between the Sockets is a full mesh.
 // We also assume 1 socket = 1 physical NUMA node.
 type hostResourcesCfg struct {
-	NumSockets int `yaml:"numberOfSockets"`
-	SncWays    int `yaml:"sncWays"`
+	Name       string `yaml:"name"`
+	NumSockets int    `yaml:"numberOfSockets"`
+	SncWays    int    `yaml:"sncWays"`
 
 	// if sncWays = 1, this is the # of CPUs on a physical NUMA node. If sncWays > 1, this is the
 	// number of CPUs on a logical nNUMA, i.e. a sub NUMA cluster.
@@ -39,4 +49,71 @@ type cfg struct {
 
 	// At least one required, except when the agent is stinglet (in that case none is required).
 	Agents []agentCfg `yaml:"agents"`
+}
+
+func parseCfgOrDie(cfgFilePath string) *cfg {
+	c, err := parseCfg(cfgFilePath)
+	if err != nil {
+		log.Fatalf("Fatal: %v", err)
+	}
+	return c
+}
+
+func parseCfg(cfgFilePath string) (*cfg, error) {
+	data, err := os.ReadFile(cfgFilePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read config file %s: %w", cfgFilePath, err)
+	}
+
+	var c cfg
+	if err := yaml.Unmarshal(data, &c); err != nil {
+		return nil, fmt.Errorf("failed to parse contents of config file %s: %w", cfgFilePath, err)
+	}
+
+	if err := validateCfg(&c); err != nil {
+		return nil, fmt.Errorf("config in file %s is invalid: %w", cfgFilePath, err)
+	}
+
+	return &c, nil
+}
+
+func validateCfg(c *cfg) error {
+	if len(c.Clusters) == 0 {
+		return fmt.Errorf("at least one cluster config is required")
+	}
+	if len(c.HostResources) == 0 {
+		return fmt.Errorf("at least one hostResources config is required")
+	}
+
+	for _, cl := range c.Clusters {
+		if cl.NumHosts <= 0 {
+			return fmt.Errorf("cluster machineId=%d: numberOfHosts must be > 0", cl.MachineID)
+		}
+		schedAlgo := strings.ToLower(strings.TrimSpace(cl.SchedulingAlgo))
+		if schedAlgo != "leastallocated" && schedAlgo != "mostallocated" {
+			return fmt.Errorf("cluster machineId=%d: unknown schedulingAlgorithm %q, "+
+				"must be LeastAllocated or MostAllocated", cl.MachineID, cl.SchedulingAlgo)
+		}
+	}
+
+	for i, hr := range c.HostResources {
+		if hr.Name == "" {
+			return fmt.Errorf("hostResources entry %d is missing a name (mandatory)", i)
+		}
+		if hr.NumSockets <= 0 {
+			return fmt.Errorf("hostResources[%s]: numSockets must be > 0", hr.Name)
+		}
+		if hr.SncWays <= 0 {
+			return fmt.Errorf("hostResources[%s]: sncWays must be > 0", hr.Name)
+		}
+		if hr.CpusPerNNUMA <= 0 {
+			return fmt.Errorf("hostResources[%s]: cpusPerNNUMA must be > 0", hr.Name)
+		}
+		if hr.GiBsPerNNUMA <= 0 {
+			return fmt.Errorf("hostResources[%s]: gibsPerNNUMA must be > 0", hr.Name)
+		}
+	}
+
+	// Validated separately per build tag in the agent-specific files.
+	return validateAgentCfgs(c.Agents)
 }

@@ -5,6 +5,7 @@ package main
 import (
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	cadvisorapi "github.com/google/cadvisor/info/v1"
@@ -156,4 +157,21 @@ func newMemMgrOrDie(tm topologymanager.Manager, mi *cadvisorapi.MachineInfo,
 	}
 
 	return mm
+}
+
+func validateAgentCfgs(aCfgs []agentCfg) error {
+	if len(aCfgs) == 0 {
+		return fmt.Errorf("at least one agent config is required, none was provided")
+	}
+	for i, a := range aCfgs {
+		topoMgrPolicy := strings.ToLower(strings.TrimSpace(a.TopologyManagerPolicy))
+		if topoMgrPolicy != topologymanager.PolicyNone &&
+			topoMgrPolicy != topologymanager.PolicyBestEffort {
+
+			return fmt.Errorf("agents[%d]: unsupported topologyManagerPolicy %q, "+
+				"must be %s or %s", i, a.TopologyManagerPolicy, topologymanager.PolicyNone,
+				topologymanager.PolicyBestEffort)
+		}
+	}
+	return nil
 }

@@ -46,6 +46,10 @@ const (
 func main() {
 	log.Printf("Running %s\n", Version)
 
+	parseFlagsOrDie()
+
+	parseCfgOrDie(*cfgFile)
+
 }
 
 // func main() {

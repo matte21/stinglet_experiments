@@ -87,3 +87,8 @@ func newHostAgentOrDie(mi *cadvisorapi.MachineInfo, _ string, _ map[string]strin
 		admittedPods: make([]*v1.Pod, 0, 8),
 	}
 }
+
+func validateAgentCfgs([]agentCfg) error {
+	// Stinglet has its own built-in policy; agent configs are ignored.
+	return nil
+}
