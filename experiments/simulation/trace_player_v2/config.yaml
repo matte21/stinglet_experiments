@@ -1,0 +1,80 @@
+clusters:
+  - machineId: 1
+    numberOfHosts: 42
+    schedulingAlgorithm: MostAllocated
+  - machineId: 1
+    numberOfHosts: 42
+    schedulingAlgorithm: LeastAllocated
+  - machineId: 10
+    numberOfHosts: 17
+    schedulingAlgorithm: MostAllocated
+  - machineId: 10
+    numberOfHosts: 17
+    schedulingAlgorithm: LeastAllocated
+  - machineId: 11
+    numberOfHosts: 63
+    schedulingAlgorithm: MostAllocated
+  - machineId: 11
+    numberOfHosts: 63
+    schedulingAlgorithm: LeastAllocated
+  - machineId: 16
+    numberOfHosts: 8
+    schedulingAlgorithm: MostAllocated
+  - machineId: 16
+    numberOfHosts: 8
+    schedulingAlgorithm: LeastAllocated
+  - machineId: 19
+    numberOfHosts: 55
+    schedulingAlgorithm: MostAllocated
+  - machineId: 19
+    numberOfHosts: 55
+    schedulingAlgorithm: LeastAllocated
+  - machineId: 21
+    numberOfHosts: 31
+    schedulingAlgorithm: MostAllocated
+  - machineId: 21
+    numberOfHosts: 31
+    schedulingAlgorithm: LeastAllocated
+  - machineId: 27
+    numberOfHosts: 74
+    schedulingAlgorithm: MostAllocated
+  - machineId: 27
+    numberOfHosts: 74
+    schedulingAlgorithm: LeastAllocated
+  - machineId: 34
+    numberOfHosts: 23
+    schedulingAlgorithm: MostAllocated
+  - machineId: 34
+    numberOfHosts: 23
+    schedulingAlgorithm: LeastAllocated
+  - machineId: 4
+    numberOfHosts: 89
+    schedulingAlgorithm: MostAllocated
+  - machineId: 4
+    numberOfHosts: 89
+    schedulingAlgorithm: LeastAllocated
+  - machineId: 6
+    numberOfHosts: 46
+    schedulingAlgorithm: MostAllocated
+  - machineId: 6
+    numberOfHosts: 46
+    schedulingAlgorithm: LeastAllocated
+
+hostResources:
+  - name: vlab
+    numberOfSockets: 2
+    sncWays: 1
+    cpusPerNNUMA: 64
+    gibsPerNNUMA: 256
+  - name: s4
+    numberOfSockets: 2
+    sncWays: 2
+    cpusPerNNUMA: 32
+    gibsPerNNUMA: 128
+
+agents:
+  - topologyManagerPolicy: none
+  - topologyManagerPolicy: best-effort
+  - topologyManagerPolicy: best-effort
+    topologyManagerOptions:
+      prefer-closest-numa-nodes: "true"
