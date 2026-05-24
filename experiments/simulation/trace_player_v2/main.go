@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"strings"
 
 	cadvisorapi "github.com/google/cadvisor/info/v1"
 	v1 "k8s.io/api/core/v1"
@@ -61,7 +62,7 @@ type simCfg struct {
 func main() {
 	log.Printf("Running %s\n", Version)
 
-	testCaseTopoParsingAndStinglet2()
+	//testCaseTopoParsingAndStinglet2()
 	//testCaseTopoParsingAndKubelets1()
 	//testCaseTopoParsingAndKubelets2()
 
@@ -69,29 +70,48 @@ func main() {
 	//testCaseTopoParsing2()
 
 	//! rm when done
-	// s := newSchedulerOrDie(2, (1 << 33), 64*1000)
-	// testCase1(s)
+	s := newSchedulerOrDie(2, (1 << 33), 64*1000, "MostAllocated")
+	//s := newSchedulerOrDie(2, (1 << 33), 64*1000, "LeastAllocated")
+	testCase1(s)
 	//testCase2(s)
 
 	//! rm when done
 	//_ = newHostAgent()
 }
 
-func newSchedulerOrDie(numNodes uint32, hostBytes, hostMilliCPUs int64) *scheduler.Scheduler {
-	ctx := context.Background()
+func newSchedulerOrDie(numHosts uint32, hostBytes, hostMilliCPUs int64, fitStrategy string) *scheduler.Scheduler {
+	var fitStrategyType schedcfg.ScoringStrategyType
+	scoringPlugins := []schedcfg.Plugin{{Name: "NodeResourcesFit", Weight: 1}}
+	scoringPluginsCfgs := []schedcfg.PluginConfig{}
+
+	switch strings.ToLower(strings.TrimSpace(fitStrategy)) {
+	case "mostallocated":
+		fitStrategyType = schedcfg.MostAllocated
+	case "leastallocated":
+		fitStrategyType = schedcfg.LeastAllocated
+		// By default in K8s Least allocated goes together with the NodeResourcesBalancedAllocation
+		// plugin and we stick to the defaults as much as possible.
+		scoringPlugins = append(scoringPlugins, schedcfg.Plugin{Name: "NodeResourcesBalancedAllocation", Weight: 1})
+		scoringPluginsCfgs = append(scoringPluginsCfgs, balanceAllocSchedulingPluginCfg())
+	default:
+		log.Fatalf("Received request to create scheduler with fit strategy %s, only supported "+
+			"strategies are LeastAllocated and MostAllocated", fitStrategy)
+	}
+	scoringPluginsCfgs = append(scoringPluginsCfgs, resourceFitSchedulingPluginCfg(fitStrategyType))
 
 	// Load default namespace and cluster nodes in the scheduler in-memory view of the cluster.
 	var objs []runtime.Object
 	objs = append(objs, &v1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ""}})
 	// TODO: replace with nodes loaded from trace
-	for i := 0; i < int(numNodes); i++ {
+	for i := 0; i < int(numHosts); i++ {
 		name := fmt.Sprintf("node-%d", i)
 		objs = append(objs, newHost(name, hostBytes, hostMilliCPUs))
 	}
-
 	client := clientsetfake.NewClientset(objs...)
-	broadcaster := events.NewBroadcaster(nopEventSink{})
 	informerFactory := informers.NewSharedInformerFactory(client, 0)
+
+	broadcaster := events.NewBroadcaster(nopEventSink{})
+	ctx := context.Background()
 
 	s, err := scheduler.New(
 		ctx,
@@ -112,35 +132,9 @@ func newSchedulerOrDie(numNodes uint32, hostBytes, hostMilliCPUs int64) *schedul
 					Bind:      schedcfg.PluginSet{Enabled: []schedcfg.Plugin{{Name: "DefaultBinder"}}},
 					PreFilter: schedcfg.PluginSet{Enabled: []schedcfg.Plugin{{Name: "NodeResourcesFit"}}},
 					Filter:    schedcfg.PluginSet{Enabled: []schedcfg.Plugin{{Name: "NodeResourcesFit"}}},
-					Score: schedcfg.PluginSet{Enabled: []schedcfg.Plugin{
-						{Name: "NodeResourcesFit", Weight: 1},
-						{Name: "NodeResourcesBalancedAllocation", Weight: 1},
-					}},
+					Score:     schedcfg.PluginSet{Enabled: scoringPlugins},
 				},
-				PluginConfig: []schedcfg.PluginConfig{
-					{
-						Name: "NodeResourcesFit",
-						Args: &schedcfg.NodeResourcesFitArgs{
-							ScoringStrategy: &schedcfg.ScoringStrategy{
-								// TODO: make the actual policy pluggable.
-								Type: schedcfg.LeastAllocated,
-								Resources: []schedcfg.ResourceSpec{
-									{Name: "cpu", Weight: 1},
-									{Name: "memory", Weight: 1},
-								},
-							},
-						},
-					},
-					{
-						Name: "NodeResourcesBalancedAllocation",
-						Args: &schedcfg.NodeResourcesBalancedAllocationArgs{
-							Resources: []schedcfg.ResourceSpec{
-								{Name: "cpu", Weight: 1},
-								{Name: "memory", Weight: 1},
-							},
-						},
-					},
-				},
+				PluginConfig: scoringPluginsCfgs,
 			},
 		),
 	)
@@ -152,6 +146,33 @@ func newSchedulerOrDie(numNodes uint32, hostBytes, hostMilliCPUs int64) *schedul
 	informerFactory.WaitForCacheSync(ctx.Done())
 
 	return s
+}
+
+func balanceAllocSchedulingPluginCfg() schedcfg.PluginConfig {
+	return schedcfg.PluginConfig{
+		Name: "NodeResourcesBalancedAllocation",
+		Args: &schedcfg.NodeResourcesBalancedAllocationArgs{
+			Resources: []schedcfg.ResourceSpec{
+				{Name: "cpu", Weight: 1},
+				{Name: "memory", Weight: 1},
+			},
+		},
+	}
+}
+
+func resourceFitSchedulingPluginCfg(fitType schedcfg.ScoringStrategyType) schedcfg.PluginConfig {
+	return schedcfg.PluginConfig{
+		Name: "NodeResourcesFit",
+		Args: &schedcfg.NodeResourcesFitArgs{
+			ScoringStrategy: &schedcfg.ScoringStrategy{
+				Type: fitType,
+				Resources: []schedcfg.ResourceSpec{
+					{Name: "cpu", Weight: 1},
+					{Name: "memory", Weight: 1},
+				},
+			},
+		},
+	}
 }
 
 func newHost(name string, bytes, milliCPUs int64) *v1.Node {
