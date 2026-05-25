@@ -44,7 +44,7 @@ type agentCfg struct {
 	TopologyManagerOptions map[string]string `yaml:"topologyManagerOptions"`
 }
 
-type cfg struct {
+type Cfg struct {
 	// At least one is required.
 	Clusters []clusterCfg `yaml:"clusters"`
 
@@ -55,7 +55,7 @@ type cfg struct {
 	Agents []agentCfg `yaml:"agents"`
 }
 
-func parseCfgOrDie(cfgFilePath string) *cfg {
+func parseCfgOrDie(cfgFilePath string) *Cfg {
 	c, err := parseCfg(cfgFilePath)
 	if err != nil {
 		log.Fatalf("Fatal: %v", err)
@@ -63,13 +63,13 @@ func parseCfgOrDie(cfgFilePath string) *cfg {
 	return c
 }
 
-func parseCfg(cfgFilePath string) (*cfg, error) {
+func parseCfg(cfgFilePath string) (*Cfg, error) {
 	data, err := os.ReadFile(cfgFilePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read config file %s: %w", cfgFilePath, err)
 	}
 
-	var c cfg
+	var c Cfg
 	if err := yaml.Unmarshal(data, &c); err != nil {
 		return nil, fmt.Errorf("failed to parse contents of config file %s: %w", cfgFilePath, err)
 	}
@@ -81,7 +81,7 @@ func parseCfg(cfgFilePath string) (*cfg, error) {
 	return &c, nil
 }
 
-func validateCfg(c *cfg) error {
+func validateCfg(c *Cfg) error {
 	if len(c.Clusters) == 0 {
 		return fmt.Errorf("at least one cluster config is required")
 	}
