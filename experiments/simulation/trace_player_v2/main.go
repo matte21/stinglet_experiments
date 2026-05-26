@@ -32,7 +32,7 @@ const miniDefaultK8sScheduler = "mini-default-k8s-sched"
 var Version = "dev"
 
 type hostAgent interface {
-	Admit(*v1.Pod) error
+	Admit(*v1.Pod) (string, error)
 	HandleDeparture(podName string) error
 }
 
@@ -232,13 +232,14 @@ func newClusterOrDie(ctx context.Context, name string, agent agentCfg, numHosts 
 	}
 
 	return &cluster{
-		name:               name,
-		agents:             agents,
-		totHostMemBytes:    hostBytes,
-		totHostCPUs:        hostCPUs,
-		scheduler:          newSchedulerOrDie(ctx, schedAlgo, hosts),
-		admittedVMIDToHost: make(map[int64]int),
-		admittedVMIDToPod:  make(map[int64]*v1.Pod),
+		name:                     name,
+		agents:                   agents,
+		totHostMemBytes:          hostBytes,
+		totHostCPUs:              hostCPUs,
+		agentRejectReasonToCount: make(map[string]uint64),
+		scheduler:                newSchedulerOrDie(ctx, schedAlgo, hosts),
+		admittedVMIDToHost:       make(map[int64]int),
+		admittedVMIDToPod:        make(map[int64]*v1.Pod),
 	}
 }
 

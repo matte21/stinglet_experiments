@@ -48,6 +48,8 @@ type cluster struct {
 	totHostMemBytes int64
 	totHostCPUs     int64
 
+	agentRejectReasonToCount map[string]uint64
+
 	// These two bools tell whether the percentage of CXL memory that VMs/pod request is taken from
 	// the Pond or GreenSKU version of the trace. They're mutually exclusive, and can both be false
 	// (no VM/pod will use CXL).
@@ -251,12 +253,14 @@ func process(ctx context.Context, e traceEvent, clusters []*cluster) error {
 			if err != nil {
 				return fmt.Errorf("got malformed host name %s from scheduler: %v\n", o.SuggestedHost, err)
 			}
-			if err := admit(c, i, p); err != nil {
+			if rejectReason, err := admit(c, i, p); err != nil {
 				c.agentRejectsCount++
 				c.agentRejectsHostsWorthOfMem += e.vmMem
 
 				c.avgHostsWorthOfMemUtilCount++
 				c.avgHostsWorthOfMemUtil += (c.curHostsWorthOfMemUtil - c.avgHostsWorthOfMemUtil) / float64(c.avgHostsWorthOfMemUtilCount)
+
+				c.agentRejectReasonToCount[rejectReason]++
 
 				continue
 			}
@@ -302,15 +306,15 @@ func schedule(ctx context.Context, c *cluster, p *v1.Pod) (k8sched.ScheduleResul
 	return r, err
 }
 
-func admit(c *cluster, i int64, p *v1.Pod) error {
+func admit(c *cluster, i int64, p *v1.Pod) (string, error) {
 	t0 := time.Now()
-	err := c.agents[i].Admit(p)
+	rejectReason, err := c.agents[i].Admit(p)
 	d := time.Since(t0).Microseconds()
 
 	c.admitTimeAvgCount++
 	c.admitTimeAvgUsec += (float64(d) - c.admitTimeAvgUsec) / float64(c.admitTimeAvgCount)
 
-	return err
+	return rejectReason, err
 }
 
 func newPodFromEvent(e traceEvent, hostBytes, hostCPUs int64) *v1.Pod {

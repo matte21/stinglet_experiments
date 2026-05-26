@@ -30,7 +30,7 @@ var _ hostAgent = &stdKubelet{}
 
 // TODO: measure admit time!
 // Note: s takes ownership of p. Callers should no longer use p after this call.
-func (s *stdKubelet) Admit(p *v1.Pod) error {
+func (s *stdKubelet) Admit(p *v1.Pod) (string, error) {
 	res := s.topoMgr.Admit(&lifecycle.PodAdmitAttributes{
 		Pod: p,
 	})
@@ -40,12 +40,12 @@ func (s *stdKubelet) Admit(p *v1.Pod) error {
 		// rejected - so we remove the container just to make sure and avoid leaking containers
 		// (note that the removal is idempotent).
 		topologymanager.SimRemoveContainer(s.topoMgr, string(p.UID), p.Spec.Containers[0].Name)
-		return fmt.Errorf("Pod rejected by agent. Reason: %s Message: %s", res.Reason, res.Message)
+		return res.Reason, fmt.Errorf("Pod rejected by agent. Reason: %s Message: %s", res.Reason, res.Message)
 	}
 
 	s.admittedPods = append(s.admittedPods, p)
 
-	return nil
+	return "", nil
 }
 
 func (s *stdKubelet) HandleDeparture(podName string) error {

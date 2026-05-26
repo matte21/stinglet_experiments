@@ -23,19 +23,19 @@ type stinglet struct {
 
 var _ hostAgent = &stinglet{}
 
-func (s *stinglet) Admit(p *v1.Pod) error {
+func (s *stinglet) Admit(p *v1.Pod) (string, error) {
 	res := s.mgr.Admit(&lifecycle.PodAdmitAttributes{
 		Pod: p,
 	})
 
 	if !res.Admit {
-		return fmt.Errorf("Pod rejected by agent. Reason: %s Message: %s", res.Reason, res.Message)
+		return res.Reason, fmt.Errorf("Pod rejected by agent. Reason: %s Message: %s", res.Reason, res.Message)
 	}
 
 	s.admittedPods = append(s.admittedPods, p)
 	s.mgr.AddContainer(p, &p.Spec.Containers[0], p.Name+"/"+p.Spec.Containers[0].Name)
 
-	return nil
+	return "", nil
 }
 
 func (s *stinglet) HandleDeparture(podName string) error {
