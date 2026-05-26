@@ -25,6 +25,8 @@ type traceEvent struct {
 }
 
 type cluster struct {
+	name string
+
 	scheduler *k8sched.Scheduler
 
 	// agent at index i runs on host at index i.
@@ -72,6 +74,10 @@ func worker(ctx context.Context, cancel context.CancelFunc, w work) {
 	defer func() {
 		log.Printf("SIM: Worker for machine ID %d, reader=%t, processor=%t, TERMINATED\n",
 			w.machineID, w.db != nil, len(w.outChans) == 0)
+
+		if len(w.outChans) == 0 {
+			printStats(w)
+		}
 	}()
 
 	if w.db == nil {
@@ -85,6 +91,19 @@ func worker(ctx context.Context, cancel context.CancelFunc, w work) {
 	// It may either process them directly or send them to processors, depending on how this program
 	// was invoked.
 	readAndSendOrProcessEvents(ctx, w)
+}
+
+func printStats(w work) {
+	for _, c := range w.clusters {
+		log.Printf("SIM: STATS: mid=%d, config=%s, arrivals=%d, sched_rejects=%d, agent_rejects=%d, avg_mem_util_hosts=%f, agent_rejects_cum_mem_util_hosts=%f\n",
+			w.machineID,
+			c.name,
+			c.arrivalsCount,
+			c.schedulerRejectsCount,
+			c.agentRejectsCount,
+			c.avgHostsWorthOfMemUtil,
+			c.agentRejectsHostsWorthOfMem)
+	}
 }
 
 func processEvents(ctx context.Context, cancel context.CancelFunc, w work) {

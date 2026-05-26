@@ -135,7 +135,8 @@ func prepareWorkOrDie(ctx context.Context, db *sql.DB, cfg *Cfg, numWorkers int)
 				for specI, spec := range c.Specs {
 					for hostResI, hostResources := range cfg.HostResources {
 						clusterIdx := agentI*len(c.Specs)*len(cfg.HostResources) + specI*len(cfg.HostResources) + hostResI
-						w.clusters[clusterIdx] = newClusterOrDie(ctx, agent, spec.NumHosts, spec.SchedulingAlgo, hostResources)
+						name := fmt.Sprintf("%s-%s-%s", spec.SchedulingAlgo, agent.Name, hostResources.Name)
+						w.clusters[clusterIdx] = newClusterOrDie(ctx, name, agent, spec.NumHosts, spec.SchedulingAlgo, hostResources)
 					}
 				}
 			}
@@ -189,7 +190,8 @@ func prepareWorkOrDie(ctx context.Context, db *sql.DB, cfg *Cfg, numWorkers int)
 					if clusterIdx >= endClusterIdx {
 						break outer
 					}
-					thisProcClusters[clusterIdx-startClusterIdx] = newClusterOrDie(ctx, agent, spec.NumHosts, spec.SchedulingAlgo, hostResources)
+					name := fmt.Sprintf("%s-%s-%s", spec.SchedulingAlgo, agent.Name, hostResources.Name)
+					thisProcClusters[clusterIdx-startClusterIdx] = newClusterOrDie(ctx, name, agent, spec.NumHosts, spec.SchedulingAlgo, hostResources)
 				}
 			}
 		}
@@ -214,7 +216,7 @@ func prepareWorkOrDie(ctx context.Context, db *sql.DB, cfg *Cfg, numWorkers int)
 	return workItems, workLeftovers
 }
 
-func newClusterOrDie(ctx context.Context, agent agentCfg, numHosts int, schedAlgo string, hostResources hostResourcesCfg) *cluster {
+func newClusterOrDie(ctx context.Context, name string, agent agentCfg, numHosts int, schedAlgo string, hostResources hostResourcesCfg) *cluster {
 	agents := make([]hostAgent, numHosts)
 	hosts := make([]*v1.Node, numHosts)
 	hostsAsObjs := make([]runtime.Object, numHosts)
@@ -231,6 +233,7 @@ func newClusterOrDie(ctx context.Context, agent agentCfg, numHosts int, schedAlg
 	}
 
 	return &cluster{
+		name:               name,
 		agents:             agents,
 		hosts:              hosts,
 		totHostMemBytes:    hostBytes,

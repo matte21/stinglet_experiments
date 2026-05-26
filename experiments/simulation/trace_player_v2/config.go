@@ -37,6 +37,8 @@ type hostResourcesCfg struct {
 }
 
 type agentCfg struct {
+	Name string `yaml:"name"`
+
 	// currently only "none" and "best-effort" are supported.
 	TopologyManagerPolicy string `yaml:"topologyManagerPolicy"`
 
