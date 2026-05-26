@@ -49,6 +49,8 @@ type cluster struct {
 	agentRejectsCount           uint64
 	agentRejectsHostsWorthOfMem float64
 	curHostsWorthOfMemUtil      float64
+	avgHostsWorthOfMemUtil      float64
+	avgHostsWorthOfMemUtilCount uint64
 	// todo: admit times field.
 }
 
@@ -204,6 +206,10 @@ func process(ctx context.Context, e traceEvent, clusters []*cluster) error {
 			if err := c.agents[i].Admit(p); err != nil {
 				c.agentRejectsCount++
 				c.agentRejectsHostsWorthOfMem += e.vmMem
+
+				c.avgHostsWorthOfMemUtilCount++
+				c.avgHostsWorthOfMemUtil += (c.curHostsWorthOfMemUtil - c.avgHostsWorthOfMemUtil) / float64(c.avgHostsWorthOfMemUtilCount)
+
 				continue
 			}
 
@@ -211,10 +217,12 @@ func process(ctx context.Context, e traceEvent, clusters []*cluster) error {
 				return fmt.Errorf("scheduler failed to add pod %s to cache: %v", p.Name, err)
 			}
 
-			c.curHostsWorthOfMemUtil += e.vmMem
-
 			c.admittedVMIDToHost[e.vmID] = int(i)
 			c.admittedVMIDToPod[e.vmID] = p
+
+			c.curHostsWorthOfMemUtil += e.vmMem
+			c.avgHostsWorthOfMemUtilCount++
+			c.avgHostsWorthOfMemUtil += (c.curHostsWorthOfMemUtil - c.avgHostsWorthOfMemUtil) / float64(c.avgHostsWorthOfMemUtilCount)
 		} else {
 			if h, ok := c.admittedVMIDToHost[e.vmID]; ok {
 				pod := c.admittedVMIDToPod[e.vmID]
