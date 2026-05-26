@@ -60,9 +60,10 @@ type cluster struct {
 	curHostsWorthOfMemUtil      float64
 	avgHostsWorthOfMemUtil      float64
 	avgHostsWorthOfMemUtilCount uint64
-	admitTimeAvg                float64
-	scheduleTimeAvg             float64
-	// todo: admit times field.
+	admitTimeAvgUsec            float64
+	admitTimeAvgCount           float64
+	schedTimeAvgMsec            float64
+	schedTimeAvgCount           float64
 }
 
 type work struct {
@@ -225,6 +226,7 @@ func process(ctx context.Context, e traceEvent, clusters []*cluster) error {
 
 			o, err := c.scheduler.SimSchedulePod(ctx, p)
 			if err != nil {
+				// TODO: check for fit error.
 				c.schedulerRejectsCount++
 				continue
 			}
@@ -233,9 +235,10 @@ func process(ctx context.Context, e traceEvent, clusters []*cluster) error {
 			// TODO: this parsing/unparsing sucks, switch to storing hosts on a map keyed by name to
 			// avoid it. Hosts have name "host-<i>" where i is their index in the hosts array.
 			_, agentI, _ := strings.Cut(o.SuggestedHost, "-")
-			// TODO: check error and panic on it.
-			i, _ := strconv.ParseInt(agentI, 10, 64)
-
+			i, err := strconv.ParseInt(agentI, 10, 64)
+			if err != nil {
+				return fmt.Errorf("got malformed host name %s from scheduler: %v\n", o.SuggestedHost, err)
+			}
 			if err := c.agents[i].Admit(p); err != nil {
 				c.agentRejectsCount++
 				c.agentRejectsHostsWorthOfMem += e.vmMem
