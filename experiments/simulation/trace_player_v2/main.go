@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"sync"
 
 	cadvisorapi "github.com/google/cadvisor/info/v1"
 	v1 "k8s.io/api/core/v1"
@@ -55,9 +56,41 @@ func main() {
 	db, closeConnFunc := connectToTraceDBOrDie(*traceDBFile, len(cfg.Clusters))
 	defer closeConnFunc()
 
-	workItems := prepareWorkOrDie(db, cfg, *numWorkers)
+	// TODO: a single ctx/cancel fot all workers is too coarse-grained, we need to switch to
+	// per-machineID contexts.
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
-	fmt.Println(workItems)
+	var leftoversMux sync.Mutex
+	workItems, workLeftovers := prepareWorkOrDie(ctx, db, cfg, *numWorkers)
+
+	// Now, actually start the workers.
+	var wg sync.WaitGroup
+	wg.Add(*numWorkers)
+	for i := 0; i < *numWorkers; i++ {
+		go func(j int) {
+			defer wg.Done()
+
+			for {
+				worker(ctx, cancel, workItems[j])
+
+				// If there are work leftovers, complete one.
+				leftoversMux.Lock()
+				if len(workLeftovers) > 0 {
+					for j = range workLeftovers {
+						break
+					}
+					delete(workLeftovers, j)
+					leftoversMux.Unlock()
+					continue
+				}
+				leftoversMux.Unlock()
+				return
+			}
+		}(i)
+	}
+
+	wg.Wait()
 }
 
 func connectToTraceDBOrDie(dbFile string, numConns int) (*sql.DB, func()) {
@@ -80,7 +113,7 @@ func connectToTraceDBOrDie(dbFile string, numConns int) (*sql.DB, func()) {
 
 // TODO: fix naming inside the following function: we use "cluster" to mean two completely separate
 // things.
-func prepareWorkOrDie(db *sql.DB, cfg *Cfg, numWorkers int) []work {
+func prepareWorkOrDie(ctx context.Context, db *sql.DB, cfg *Cfg, numWorkers int) ([]work, map[int]struct{}) {
 	numWorkItems := numWorkers
 	if numWorkers < len(cfg.Clusters) {
 		numWorkItems = len(cfg.Clusters)
@@ -102,7 +135,7 @@ func prepareWorkOrDie(db *sql.DB, cfg *Cfg, numWorkers int) []work {
 				for specI, spec := range c.Specs {
 					for hostResI, hostResources := range cfg.HostResources {
 						clusterIdx := agentI*len(c.Specs)*len(cfg.HostResources) + specI*len(cfg.HostResources) + hostResI
-						w.clusters[clusterIdx] = newClusterOrDie(agent, spec.NumHosts, spec.SchedulingAlgo, hostResources)
+						w.clusters[clusterIdx] = newClusterOrDie(ctx, agent, spec.NumHosts, spec.SchedulingAlgo, hostResources)
 					}
 				}
 			}
@@ -156,7 +189,7 @@ func prepareWorkOrDie(db *sql.DB, cfg *Cfg, numWorkers int) []work {
 					if clusterIdx >= endClusterIdx {
 						break outer
 					}
-					thisProcClusters[clusterIdx-startClusterIdx] = newClusterOrDie(agent, spec.NumHosts, spec.SchedulingAlgo, hostResources)
+					thisProcClusters[clusterIdx-startClusterIdx] = newClusterOrDie(ctx, agent, spec.NumHosts, spec.SchedulingAlgo, hostResources)
 				}
 			}
 		}
@@ -173,10 +206,15 @@ func prepareWorkOrDie(db *sql.DB, cfg *Cfg, numWorkers int) []work {
 		workItems = append(workItems, w)
 	}
 
-	return workItems
+	workLeftovers := make(map[int]struct{})
+	for i := numWorkers; i < len(cfg.Clusters); i++ {
+		workLeftovers[i] = struct{}{}
+	}
+
+	return workItems, workLeftovers
 }
 
-func newClusterOrDie(agent agentCfg, numHosts int, schedAlgo string, hostResources hostResourcesCfg) cluster {
+func newClusterOrDie(ctx context.Context, agent agentCfg, numHosts int, schedAlgo string, hostResources hostResourcesCfg) cluster {
 	agents := make([]hostAgent, numHosts)
 	hosts := make([]*v1.Node, numHosts)
 	hostsAsObjs := make([]runtime.Object, numHosts)
@@ -195,7 +233,7 @@ func newClusterOrDie(agent agentCfg, numHosts int, schedAlgo string, hostResourc
 	return cluster{
 		agents:    agents,
 		hosts:     hosts,
-		scheduler: newSchedulerOrDie(schedAlgo, hostsAsObjs),
+		scheduler: newSchedulerOrDie(ctx, schedAlgo, hostsAsObjs),
 	}
 }
 
@@ -219,7 +257,7 @@ func newClusterOrDie(agent agentCfg, numHosts int, schedAlgo string, hostResourc
 // 	//_ = newHostAgent()
 // }
 
-func newSchedulerOrDie(fitStrategy string, hosts []runtime.Object) *scheduler.Scheduler {
+func newSchedulerOrDie(ctx context.Context, fitStrategy string, hosts []runtime.Object) *scheduler.Scheduler {
 	var fitStrategyType schedcfg.ScoringStrategyType
 	scoringPlugins := []schedcfg.Plugin{{Name: "NodeResourcesFit", Weight: 1}}
 	scoringPluginsCfgs := []schedcfg.PluginConfig{}
@@ -247,7 +285,6 @@ func newSchedulerOrDie(fitStrategy string, hosts []runtime.Object) *scheduler.Sc
 	informerFactory := informers.NewSharedInformerFactory(client, 0)
 
 	broadcaster := events.NewBroadcaster(nopEventSink{})
-	ctx := context.Background()
 
 	s, err := scheduler.New(
 		ctx,
