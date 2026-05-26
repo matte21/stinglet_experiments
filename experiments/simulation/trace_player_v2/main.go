@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"io"
 	"log"
 	"strings"
 	"sync"
@@ -47,6 +48,8 @@ const (
 )
 
 func main() {
+	klog.SetOutput(io.Discard)
+
 	log.Printf("SIM: Running %s\n", Version)
 
 	parseFlagsOrDie()
@@ -244,26 +247,6 @@ func newClusterOrDie(ctx context.Context, name string, agent agentCfg, numHosts 
 	}
 }
 
-// func main() {
-// 	log.Printf("Running %s\n", Version)
-
-// 	//testCaseTopoParsingAndStinglet2()
-// 	//testCaseTopoParsingAndKubelets1()
-// 	//testCaseTopoParsingAndKubelets2()
-
-// 	//testCaseTopoParsing1()
-// 	//testCaseTopoParsing2()
-
-// 	//! rm when done
-// 	s := newSchedulerOrDie(2, (1 << 33), 64*1000, "MostAllocated")
-// 	//s := newSchedulerOrDie(2, (1 << 33), 64*1000, "LeastAllocated")
-// 	testCase1(s)
-// 	//testCase2(s)
-
-// 	//! rm when done
-// 	//_ = newHostAgent()
-// }
-
 func newSchedulerOrDie(ctx context.Context, fitStrategy string, hosts []runtime.Object) *scheduler.Scheduler {
 	var fitStrategyType schedcfg.ScoringStrategyType
 	scoringPlugins := []schedcfg.Plugin{{Name: "NodeResourcesFit", Weight: 1}}
@@ -293,12 +276,14 @@ func newSchedulerOrDie(ctx context.Context, fitStrategy string, hosts []runtime.
 
 	broadcaster := events.NewBroadcaster(nopEventSink{})
 
+	nodesToScore := int32(10)
 	s, err := scheduler.New(
 		ctx,
 		client,
 		informerFactory,
 		nil,
 		profile.NewRecorderFactory(broadcaster),
+		scheduler.WithPercentageOfNodesToScore(&nodesToScore),
 		scheduler.WithProfiles(
 			// We don't want to be attacked on the choice of the scheduling policy. So we pass the
 			// "default" K8s scheduler, i.e., enable all default plugins. Note that we don't
@@ -423,57 +408,6 @@ func (n nopEventSink) Update(_ context.Context, e *eventsv1.Event) (*eventsv1.Ev
 	return e, nil
 }
 
-// TODO: remove me.
-func testCase1(s *scheduler.Scheduler) {
-	allPods := []*v1.Pod{
-		newPod("pod-1", 4*(1<<30), 32, true),
-		newPod("pod-2", 4*(1<<30), 32, true),
-		newPod("pod-3", 5*(1<<30), 32, true),
-	}
-
-	for _, p := range allPods {
-		o, err := s.SimSchedulePod(context.Background(), p)
-		if err != nil {
-			log.Printf("Failed to schedule pod %s: %v\n", p.Name, err)
-			continue
-		}
-		log.Printf("Pod %s to %s\n", p.Name, o.SuggestedHost)
-		p.Spec.NodeName = o.SuggestedHost
-		s.Cache.AddPod(klog.Background(), p)
-	}
-
-	s.Cache.RemovePod(klog.Background(), allPods[0])
-
-	p := newPod("pod-4", 5*(1<<30), 32, true)
-	o, err := s.SimSchedulePod(context.Background(), p)
-	if err != nil {
-		log.Printf("Failed to schedule pod %s: %v\n", p.Name, err)
-		return
-	}
-	log.Printf("Pod %s to %s\n", p.Name, o.SuggestedHost)
-	p.Spec.NodeName = o.SuggestedHost
-	s.Cache.AddPod(klog.Background(), p)
-}
-
-// TODO: remove me.
-func testCase2(s *scheduler.Scheduler) {
-	allPods := []*v1.Pod{
-		newPod("pod-1", 2*(1<<30), 32, true),
-		newPod("pod-2", 2*(1<<30), 32, true),
-	}
-
-	for _, p := range allPods {
-		o, err := s.SimSchedulePod(context.Background(), p)
-		if err != nil {
-			log.Printf("Failed to schedule pod %s: %v\n", p.Name, err)
-			continue
-		}
-		log.Printf("Pod %s to %s\n", p.Name, o.SuggestedHost)
-		p.Spec.NodeName = o.SuggestedHost
-		s.Cache.AddPod(klog.Background(), p)
-	}
-}
-
 // NOTE: this code assumes the topology is either the one in VLAB, or the one in S4. It does not
 // generalize to arbitrary topologies.
 func generateMachineInfo(cfg *hostResourcesCfg) *cadvisorapi.MachineInfo {
@@ -528,181 +462,3 @@ func generateMachineInfo(cfg *hostResourcesCfg) *cadvisorapi.MachineInfo {
 		MemoryCapacity: uint64(len(nodes)) * perNNUMABytes,
 	}
 }
-
-// TODO: rm me.
-func testCaseTopoParsing1() {
-	sc := &hostResourcesCfg{
-		NumSockets:   2,
-		SncWays:      1,
-		CpusPerNNUMA: 64,
-		GiBsPerNNUMA: 256,
-	}
-
-	t := generateMachineInfo(sc)
-
-	fmt.Println(t)
-}
-
-// TODO: rm me.
-// func testCaseTopoParsing2() {
-// 	sc := &simCfg{
-// 		numSockets:   2,
-// 		sncWays:      2,
-// 		cpusPerNNUMA: 32,
-// 		gibsPerNNUMA: 128,
-// 	}
-
-// 	t := generateMachineInfo(sc)
-
-// 	fmt.Println(t)
-// }
-
-// // TODO: rm me.
-// func testCaseTopoParsingAndKubelets1() {
-// 	sc := &simCfg{
-// 		numSockets:   2,
-// 		sncWays:      2,
-// 		cpusPerNNUMA: 32,
-// 		gibsPerNNUMA: 128,
-// 	}
-
-// 	t := generateMachineInfo(sc)
-
-// 	agent := newHostAgentOrDie(t, topologymanager.PolicyBestEffort, nil)
-
-// 	allPods := []*v1.Pod{
-// 		newPod("pod-1", int64((sc.gibsPerNNUMA*3)/4)*(1<<30), 2, true),
-// 		newPod("pod-2", int64((sc.gibsPerNNUMA*3)/4)*(1<<30), 2, true),
-// 		newPod("pod-3", int64((sc.gibsPerNNUMA*3)/4)*(1<<30), 2, true),
-// 		newPod("pod-4", int64((sc.gibsPerNNUMA*3)/4)*(1<<30), 2, true),
-// 	}
-
-// 	for _, p := range allPods {
-// 		if err := agent.Admit(p); err != nil {
-// 			fmt.Printf("agent rejected pod %s: %v\n", p.Name, err)
-// 		} else {
-// 			fmt.Printf("agent accepted pod %s\n", p.Name)
-// 		}
-// 	}
-
-// 	rejectPod := newPod("pod-5", int64(sc.gibsPerNNUMA/2)*(1<<30), 2, true)
-// 	if err := agent.Admit(rejectPod); err != nil {
-// 		fmt.Printf("agent rejected pod %s: %v\n", rejectPod.Name, err)
-// 	} else {
-// 		fmt.Printf("agent accepted pod %s\n", rejectPod.Name)
-// 	}
-
-// 	agent.HandleDeparture("pod-1")
-
-// 	acceptedPod := newPod("pod-6", int64(sc.gibsPerNNUMA/2)*(1<<30), 2, true)
-// 	if err := agent.Admit(acceptedPod); err != nil {
-// 		fmt.Printf("agent rejected pod %s: %v\n", acceptedPod.Name, err)
-// 	} else {
-// 		fmt.Printf("agent accepted pod %s\n", acceptedPod.Name)
-// 	}
-// }
-
-// // TODO: rm me.
-// func testCaseTopoParsingAndKubelets2() {
-// 	sc := &simCfg{
-// 		numSockets:   2,
-// 		sncWays:      2,
-// 		cpusPerNNUMA: 32,
-// 		gibsPerNNUMA: 128,
-// 	}
-
-// 	t := generateMachineInfo(sc)
-
-// 	agentDefault := newHostAgentOrDie(t, topologymanager.PolicyBestEffort, nil)
-// 	agentClose := newHostAgentOrDie(t, topologymanager.PolicyBestEffort, map[string]string{
-// 		topologymanager.PreferClosestNUMANodes: "true",
-// 	})
-
-// 	allPods := []*v1.Pod{
-// 		newPod("pod-1", int64(sc.gibsPerNNUMA-10)*(1<<30), 2, true),
-// 		newPod("pod-2", int64(sc.gibsPerNNUMA*2)*(1<<30), 2, true),
-// 	}
-
-// 	for _, p := range allPods {
-// 		if err := agentDefault.Admit(p); err != nil {
-// 			fmt.Printf("agent default rejected pod %s: %v\n", p.Name, err)
-// 		} else {
-// 			fmt.Printf("agent default accepted pod %s\n", p.Name)
-// 		}
-
-// 		if err := agentClose.Admit(p); err != nil {
-// 			fmt.Printf("agent close rejected pod %s: %v\n", p.Name, err)
-// 		} else {
-// 			fmt.Printf("agent close accepted pod %s\n", p.Name)
-// 		}
-// 	}
-// }
-
-// // TODO: rm me.
-// func testCaseTopoParsingAndStinglet1() {
-// 	sc := &simCfg{
-// 		numSockets:   2,
-// 		sncWays:      2,
-// 		cpusPerNNUMA: 32,
-// 		gibsPerNNUMA: 128,
-// 	}
-
-// 	t := generateMachineInfo(sc)
-
-// 	agent := newHostAgentOrDie(t, "", nil)
-
-// 	allPods := []*v1.Pod{
-// 		newPod("pod-1", int64((sc.gibsPerNNUMA*3)/4)*(1<<30), 2, true),
-// 		newPod("pod-2", int64((sc.gibsPerNNUMA*3)/4)*(1<<30), 2, true),
-// 		newPod("pod-3", int64((sc.gibsPerNNUMA*3)/4)*(1<<30), 2, true),
-// 		newPod("pod-4", int64((sc.gibsPerNNUMA*3)/4)*(1<<30), 2, true),
-// 		newPod("pod-5", int64((sc.gibsPerNNUMA*3)/4-5)*(1<<30), 2, true),
-// 	}
-
-// 	for _, p := range allPods {
-// 		if err := agent.Admit(p); err != nil {
-// 			fmt.Printf("agent rejected pod %s: %v\n", p.Name, err)
-// 		} else {
-// 			fmt.Printf("agent accepted pod %s\n", p.Name)
-// 		}
-// 	}
-
-// 	fmt.Println("foo")
-// }
-
-// // TODO: rm me.
-// func testCaseTopoParsingAndStinglet2() {
-// 	sc := &simCfg{
-// 		numSockets:   2,
-// 		sncWays:      2,
-// 		cpusPerNNUMA: 32,
-// 		gibsPerNNUMA: 128,
-// 	}
-
-// 	t := generateMachineInfo(sc)
-
-// 	agent := newHostAgentOrDie(t, "", nil)
-
-// 	allPods := []*v1.Pod{
-// 		newPod("pod-1", int64((sc.gibsPerNNUMA*3)/4)*(1<<30), 2, true),
-// 		newPod("pod-2", int64((sc.gibsPerNNUMA*3)/4)*(1<<30), 2, true),
-// 		newPod("pod-3", int64(sc.gibsPerNNUMA*2)*(1<<30), 2, true),
-// 	}
-
-// 	for _, p := range allPods {
-// 		if err := agent.Admit(p); err != nil {
-// 			fmt.Printf("agent rejected pod %s: %v\n", p.Name, err)
-// 		} else {
-// 			fmt.Printf("agent accepted pod %s\n", p.Name)
-// 		}
-// 	}
-
-// 	for _, p := range allPods {
-// 		if err := agent.HandleDeparture(p.Name); err != nil {
-// 			fmt.Printf("agent failed to delete pod %s: %v\n", p.Name, err)
-// 		} else {
-// 			fmt.Printf("agent deleted pod %s\n", p.Name)
-// 		}
-// 	}
-
-// }
