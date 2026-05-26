@@ -47,8 +47,10 @@ type work struct {
 }
 
 func worker(ctx context.Context, cancel context.CancelFunc, w work) {
+	log.Printf("SIM: Worker for machine ID %d, reader=%t, processor=%t, STARTED\n",
+		w.machineID, w.db != nil, len(w.outChans) == 0)
 	defer func() {
-		log.Printf("Worker for machine ID %d, reader=%t, processor=%t, TERMINATED\n",
+		log.Printf("SIM: Worker for machine ID %d, reader=%t, processor=%t, TERMINATED\n",
 			w.machineID, w.db != nil, len(w.outChans) == 0)
 	}()
 
@@ -77,7 +79,7 @@ func processEvents(ctx context.Context, cancel context.CancelFunc, w work) {
 				return
 			}
 			if err := process(event); err != nil {
-				log.Printf("ERROR: processor of machine ID %d failed to process event: %v\n",
+				log.Printf("SIM: ERROR: processor of machine ID %d failed to process event: %v\n",
 					w.machineID, err)
 				cancel()
 				return
@@ -102,13 +104,13 @@ func readAndSendOrProcessEvents(ctx context.Context, w work) {
 		`FROM "events-machine-id-%d" ORDER BY time`, w.machineID)
 	trace, err := w.db.Query(query)
 	if err != nil {
-		log.Printf("ERROR: reader of machine ID %d failed to run query \"%s\": %v\n",
+		log.Printf("SIM: ERROR: reader of machine ID %d failed to run query \"%s\": %v\n",
 			w.machineID, query, err)
 		return
 	}
 	defer func() {
 		if err := trace.Close(); err != nil {
-			log.Printf("WARNING: reader of machine ID %d failed to close DB connection: %v\n",
+			log.Printf("SIM: WARNING: reader of machine ID %d failed to close DB connection: %v\n",
 				w.machineID, err)
 		}
 	}()
@@ -125,7 +127,7 @@ func readAndSendOrProcessEvents(ctx context.Context, w work) {
 			&e.vmCXLMemPercentPond,
 			&e.vmCXLMemPercentGreenSKU,
 		); err != nil {
-			log.Printf("ERROR: reader of machine ID %d failed to scan row: %v\n", w.machineID, err)
+			log.Printf("SIM: ERROR: reader of machine ID %d failed to scan row: %v\n", w.machineID, err)
 			return
 		}
 
@@ -137,7 +139,7 @@ func readAndSendOrProcessEvents(ctx context.Context, w work) {
 			// If we're here, this worker is both a reader and a processor of events, so we
 			// process them.
 			if err := process(e); err != nil {
-				log.Printf("ERROR: processor of machine ID %d failed to process event: %v\n",
+				log.Printf("SIM: ERROR: processor of machine ID %d failed to process event: %v\n",
 					w.machineID, err)
 				return
 			}
@@ -156,7 +158,7 @@ func readAndSendOrProcessEvents(ctx context.Context, w work) {
 	}
 
 	if err := trace.Err(); err != nil {
-		log.Printf("ERROR: reader of machine ID %d failed to prepare next row: %v\n",
+		log.Printf("SIM: ERROR: reader of machine ID %d failed to prepare next row: %v\n",
 			w.machineID, err)
 	}
 }

@@ -19,12 +19,12 @@ func parseFlagsOrDie() {
 	flag.Parse()
 
 	if *traceDBFile == "" {
-		log.Fatal("--trace-db-file is required")
+		log.Fatal("SIM: --trace-db-file is required")
 	}
 	if *cfgFile == "" {
-		log.Fatal("--config-file is required")
+		log.Fatal("SIM: --config-file is required")
 	}
 	if *numWorkers <= 0 {
-		log.Fatal("--num-workers must be > 0")
+		log.Fatal("SIM: --num-workers must be > 0")
 	}
 }

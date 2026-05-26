@@ -58,7 +58,7 @@ type Cfg struct {
 func parseCfgOrDie(cfgFilePath string) *Cfg {
 	c, err := parseCfg(cfgFilePath)
 	if err != nil {
-		log.Fatalf("Fatal: %v", err)
+		log.Fatalf("SIM: Fatal: %v", err)
 	}
 	return c
 }

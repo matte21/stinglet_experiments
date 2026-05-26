@@ -47,7 +47,7 @@ const (
 )
 
 func main() {
-	log.Printf("Running %s\n", Version)
+	log.Printf("SIM: Running %s\n", Version)
 
 	parseFlagsOrDie()
 
@@ -96,7 +96,7 @@ func main() {
 func connectToTraceDBOrDie(dbFile string, numConns int) (*sql.DB, func()) {
 	db, err := sql.Open("sqlite", "file:"+dbFile+"?mode=ro")
 	if err != nil {
-		log.Fatalf("Fatal: failed to open sqlite DB file %s storing the trace: %v", dbFile, err)
+		log.Fatalf("SIM: Fatal: failed to open sqlite DB file %s storing the trace: %v", dbFile, err)
 	}
 
 	db.SetMaxOpenConns(numConns)
@@ -104,7 +104,7 @@ func connectToTraceDBOrDie(dbFile string, numConns int) (*sql.DB, func()) {
 
 	closeDB := func() {
 		if err := db.Close(); err != nil {
-			log.Printf("Failed to close sqlite DB file %s storing the trace: %v\n", dbFile, err)
+			log.Printf("SIM: Failed to close sqlite DB file %s storing the trace: %v\n", dbFile, err)
 		}
 	}
 
@@ -272,7 +272,7 @@ func newSchedulerOrDie(ctx context.Context, fitStrategy string, hosts []runtime.
 		scoringPlugins = append(scoringPlugins, schedcfg.Plugin{Name: "NodeResourcesBalancedAllocation", Weight: 1})
 		scoringPluginsCfgs = append(scoringPluginsCfgs, balanceAllocSchedulingPluginCfg())
 	default:
-		log.Fatalf("Received request to create scheduler with fit strategy %s, only supported "+
+		log.Fatalf("SIM: Received request to create scheduler with fit strategy %s, only supported "+
 			"strategies are LeastAllocated and MostAllocated", fitStrategy)
 	}
 	scoringPluginsCfgs = append(scoringPluginsCfgs, resourceFitSchedulingPluginCfg(fitStrategyType))
@@ -312,7 +312,7 @@ func newSchedulerOrDie(ctx context.Context, fitStrategy string, hosts []runtime.
 		),
 	)
 	if err != nil {
-		log.Fatalf("Failed to instantiate K8s scheduler: %v\n", err)
+		log.Fatalf("SIM: Failed to instantiate K8s scheduler: %v\n", err)
 	}
 
 	informerFactory.Start(ctx.Done())
