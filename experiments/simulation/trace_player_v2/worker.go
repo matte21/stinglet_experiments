@@ -154,6 +154,8 @@ func readAndSendOrProcessEvents(ctx context.Context, w work) {
 		}
 	}()
 
+	var eventsRead uint64
+
 	// Now read the trace events from the DB, and either process them directly or send them
 	// directly.
 	e := traceEvent{}
@@ -193,6 +195,12 @@ func readAndSendOrProcessEvents(ctx context.Context, w work) {
 				case ch <- e:
 				}
 			}
+		}
+
+		eventsRead++
+		// todo: put the logging period in a const.
+		if eventsRead%400000 == 0 {
+			log.Printf("SIM: mid=%d dispatched %d events\n", w.machineID, eventsRead)
 		}
 	}
 
