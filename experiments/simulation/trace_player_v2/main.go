@@ -52,8 +52,10 @@ func main() {
 
 	cfg := parseCfgOrDie(*cfgFile)
 
-	_, closeConnFunc := connectToTraceDBOrDie(*traceDBFile, len(cfg.Clusters))
+	db, closeConnFunc := connectToTraceDBOrDie(*traceDBFile, len(cfg.Clusters))
 	defer closeConnFunc()
+
+	prepareWorkOrDie(db, cfg, *numWorkers)
 }
 
 func connectToTraceDBOrDie(dbFile string, numConns int) (*sql.DB, func()) {
@@ -72,6 +74,122 @@ func connectToTraceDBOrDie(dbFile string, numConns int) (*sql.DB, func()) {
 	}
 
 	return db, closeDB
+}
+
+// TODO: fix naming inside the following function: we use "cluster" to mean two completely separate
+// things.
+func prepareWorkOrDie(db *sql.DB, cfg *Cfg, numWorkers int) []work {
+	workItems := make([]work, len(cfg.Clusters), numWorkers)
+
+	for i, c := range cfg.Clusters {
+		w := work{
+			machineID: c.MachineID,
+			db:        db,
+		}
+
+		if i >= numWorkers-len(cfg.Clusters) {
+			// If we're here readers of trace events are also processors of events.
+			numClusters := len(c.Specs) * len(cfg.Agents) * len(cfg.HostResources)
+			w.clusters = make([]cluster, numClusters)
+
+			for agentI, agent := range cfg.Agents {
+				for specI, spec := range c.Specs {
+					for hostResI, hostResources := range cfg.HostResources {
+						clusterIdx := agentI*len(c.Specs)*len(cfg.HostResources) + specI*len(cfg.HostResources) + hostResI
+						w.clusters[clusterIdx] = newClusterOrDie(agent, spec.NumHosts, spec.SchedulingAlgo, hostResources)
+					}
+				}
+			}
+		}
+
+		workItems[i] = w
+	}
+
+	// Minimum number of workers that are only processors for each cfg cluster AKA machine ID.
+	minNumProcessorsOnly := (numWorkers / len(cfg.Clusters)) - 1
+
+	// All cluster IDs < the following one have one more processor on top of minNumProcessorsOnly.
+	minClusterIDWOExtraProcessor := numWorkers % len(cfg.Clusters)
+
+	for i := len(cfg.Clusters); i < numWorkers; i++ {
+		clusterID := i % len(cfg.Clusters)
+
+		numProcessorsForThisCluster := minNumProcessorsOnly
+		if clusterID < minClusterIDWOExtraProcessor {
+			numProcessorsForThisCluster++
+		}
+
+		clus := cfg.Clusters[clusterID]
+		totNumClusters := len(clus.Specs) * len(cfg.Agents) * len(cfg.HostResources)
+
+		// Now, determine how many clusters this processor must process.
+		procIdx := i / len(cfg.Clusters)
+
+		numClustersForThisProcessor := totNumClusters / numProcessorsForThisCluster
+		maxProcIdxWExcessCluster := totNumClusters % numProcessorsForThisCluster
+		if procIdx <= maxProcIdxWExcessCluster {
+			numClustersForThisProcessor++
+		}
+		startClusterIdx := (procIdx - 1) * numClustersForThisProcessor
+		if procIdx > maxProcIdxWExcessCluster {
+			startClusterIdx += maxProcIdxWExcessCluster
+		}
+		endClusterIdx := startClusterIdx + numClustersForThisProcessor
+
+		thisProcClusters := make([]cluster, numClustersForThisProcessor)
+
+		// TODO: this loop is perversely inefficient, speed it up.
+	outer:
+		for agentI, agent := range cfg.Agents {
+			for specI, spec := range clus.Specs {
+				for hostResI, hostResources := range cfg.HostResources {
+					clusterIdx := agentI*len(clus.Specs)*len(cfg.HostResources) + specI*len(cfg.HostResources) + hostResI
+					if clusterIdx < startClusterIdx {
+						continue
+					}
+					if clusterIdx >= endClusterIdx {
+						break outer
+					}
+					thisProcClusters[clusterIdx-startClusterIdx] = newClusterOrDie(agent, spec.NumHosts, spec.SchedulingAlgo, hostResources)
+				}
+			}
+		}
+
+		ch := make(chan traceEvent, 5)
+		w := work{
+			inChan:   ch,
+			clusters: thisProcClusters,
+		}
+		// wire the out channel for the corresponding reader.
+		workItems[clusterID].outChans = append(workItems[clusterID].outChans, ch)
+
+		workItems = append(workItems, w)
+	}
+
+	return workItems
+}
+
+func newClusterOrDie(agent agentCfg, numHosts int, schedAlgo string, hostResources hostResourcesCfg) cluster {
+	agents := make([]hostAgent, numHosts)
+	hosts := make([]*v1.Node, numHosts)
+	hostsAsObjs := make([]runtime.Object, numHosts)
+
+	hostMilliCPUs := int64(hostResources.NumSockets) * int64(hostResources.SncWays) * int64(hostResources.CpusPerNNUMA) * 1000
+	hostBytes := int64(hostResources.NumSockets) * int64(hostResources.SncWays) * int64(hostResources.GiBsPerNNUMA) * (1 << 30)
+
+	mi := generateMachineInfo(&hostResources)
+
+	for i := range numHosts {
+		agents[i] = newHostAgentOrDie(mi, agent.TopologyManagerPolicy, agent.TopologyManagerOptions)
+		hosts[i] = newHost(fmt.Sprintf("host-%d", i), hostBytes, hostMilliCPUs)
+		hostsAsObjs[i] = hosts[i]
+	}
+
+	return cluster{
+		agents:    agents,
+		hosts:     hosts,
+		scheduler: newSchedulerOrDie(schedAlgo, hostsAsObjs),
+	}
 }
 
 // func main() {
@@ -94,7 +212,7 @@ func connectToTraceDBOrDie(dbFile string, numConns int) (*sql.DB, func()) {
 // 	//_ = newHostAgent()
 // }
 
-func newSchedulerOrDie(numHosts uint32, hostBytes, hostMilliCPUs int64, fitStrategy string) *scheduler.Scheduler {
+func newSchedulerOrDie(fitStrategy string, hosts []runtime.Object) *scheduler.Scheduler {
 	var fitStrategyType schedcfg.ScoringStrategyType
 	scoringPlugins := []schedcfg.Plugin{{Name: "NodeResourcesFit", Weight: 1}}
 	scoringPluginsCfgs := []schedcfg.PluginConfig{}
@@ -117,11 +235,7 @@ func newSchedulerOrDie(numHosts uint32, hostBytes, hostMilliCPUs int64, fitStrat
 	// Load default namespace and cluster nodes in the scheduler in-memory view of the cluster.
 	var objs []runtime.Object
 	objs = append(objs, &v1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ""}})
-	// TODO: replace with nodes loaded from trace
-	for i := 0; i < int(numHosts); i++ {
-		name := fmt.Sprintf("node-%d", i)
-		objs = append(objs, newHost(name, hostBytes, hostMilliCPUs))
-	}
+	objs = append(objs, hosts...)
 	client := clientsetfake.NewClientset(objs...)
 	informerFactory := informers.NewSharedInformerFactory(client, 0)
 
