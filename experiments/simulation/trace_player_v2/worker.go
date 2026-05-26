@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"log"
 	"math"
@@ -17,6 +18,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2"
 	k8sched "k8s.io/kubernetes/pkg/scheduler"
+	k8schedfwk "k8s.io/kubernetes/pkg/scheduler/framework"
 )
 
 const (
@@ -233,9 +235,12 @@ func process(ctx context.Context, e traceEvent, clusters []*cluster) error {
 
 			o, err := schedule(ctx, c, p)
 			if err != nil {
-				// TODO: check for fit error.
-				c.schedulerRejectsCount++
-				continue
+				var fitErr *k8schedfwk.FitError
+				if errors.As(err, &fitErr) {
+					c.schedulerRejectsCount++
+					continue
+				}
+				return fmt.Errorf("scheduling of pod %s failed with error other than fit error: %w", p.Name, err)
 			}
 			p.Spec.NodeName = o.SuggestedHost
 
