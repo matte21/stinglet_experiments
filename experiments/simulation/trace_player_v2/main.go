@@ -221,8 +221,7 @@ func prepareWorkOrDie(ctx context.Context, db *sql.DB, cfg *Cfg, numWorkers int)
 
 func newClusterOrDie(ctx context.Context, name string, agent agentCfg, numHosts int, schedAlgo string, hostResources hostResourcesCfg) *cluster {
 	agents := make([]hostAgent, numHosts)
-	hosts := make([]*v1.Node, numHosts)
-	hostsAsObjs := make([]runtime.Object, numHosts)
+	hosts := make([]runtime.Object, numHosts)
 
 	hostMilliCPUs := int64(hostResources.NumSockets) * int64(hostResources.SncWays) * int64(hostResources.CpusPerNNUMA) * 1000
 	hostBytes := int64(hostResources.NumSockets) * int64(hostResources.SncWays) * int64(hostResources.GiBsPerNNUMA) * (1 << 30)
@@ -232,16 +231,14 @@ func newClusterOrDie(ctx context.Context, name string, agent agentCfg, numHosts 
 	for i := range numHosts {
 		agents[i] = newHostAgentOrDie(mi, agent.TopologyManagerPolicy, agent.TopologyManagerOptions)
 		hosts[i] = newHost(fmt.Sprintf("host-%d", i), hostBytes, hostMilliCPUs)
-		hostsAsObjs[i] = hosts[i]
 	}
 
 	return &cluster{
 		name:               name,
 		agents:             agents,
-		hosts:              hosts,
 		totHostMemBytes:    hostBytes,
 		totHostMilliCores:  hostMilliCPUs,
-		scheduler:          newSchedulerOrDie(ctx, schedAlgo, hostsAsObjs),
+		scheduler:          newSchedulerOrDie(ctx, schedAlgo, hosts),
 		admittedVMIDToHost: make(map[int64]int),
 		admittedVMIDToPod:  make(map[int64]*v1.Pod),
 	}

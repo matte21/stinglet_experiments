@@ -38,7 +38,6 @@ type cluster struct {
 
 	// agent at index i runs on host at index i.
 	agents            []hostAgent
-	hosts             []*k8sapi.Node
 	totHostMemBytes   int64
 	totHostMilliCores int64
 
