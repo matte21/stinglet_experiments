@@ -55,7 +55,9 @@ func main() {
 	db, closeConnFunc := connectToTraceDBOrDie(*traceDBFile, len(cfg.Clusters))
 	defer closeConnFunc()
 
-	prepareWorkOrDie(db, cfg, *numWorkers)
+	workItems := prepareWorkOrDie(db, cfg, *numWorkers)
+
+	fmt.Println(workItems)
 }
 
 func connectToTraceDBOrDie(dbFile string, numConns int) (*sql.DB, func()) {
@@ -79,7 +81,11 @@ func connectToTraceDBOrDie(dbFile string, numConns int) (*sql.DB, func()) {
 // TODO: fix naming inside the following function: we use "cluster" to mean two completely separate
 // things.
 func prepareWorkOrDie(db *sql.DB, cfg *Cfg, numWorkers int) []work {
-	workItems := make([]work, len(cfg.Clusters), numWorkers)
+	numWorkItems := numWorkers
+	if numWorkers < len(cfg.Clusters) {
+		numWorkItems = len(cfg.Clusters)
+	}
+	workItems := make([]work, len(cfg.Clusters), numWorkItems)
 
 	for i, c := range cfg.Clusters {
 		w := work{
@@ -157,8 +163,9 @@ func prepareWorkOrDie(db *sql.DB, cfg *Cfg, numWorkers int) []work {
 
 		ch := make(chan traceEvent, 5)
 		w := work{
-			inChan:   ch,
-			clusters: thisProcClusters,
+			machineID: cfg.Clusters[clusterID].MachineID,
+			inChan:    ch,
+			clusters:  thisProcClusters,
 		}
 		// wire the out channel for the corresponding reader.
 		workItems[clusterID].outChans = append(workItems[clusterID].outChans, ch)
