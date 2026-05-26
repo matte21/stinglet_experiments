@@ -7,6 +7,7 @@ import (
 	"log"
 	"strconv"
 	"strings"
+	"time"
 
 	k8sapi "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
@@ -60,9 +61,9 @@ type cluster struct {
 	avgHostsWorthOfMemUtil      float64
 	avgHostsWorthOfMemUtilCount uint64
 	admitTimeAvgUsec            float64
-	admitTimeAvgCount           float64
-	schedTimeAvgMsec            float64
-	schedTimeAvgCount           float64
+	admitTimeAvgCount           uint64
+	schedTimeAvgUsec            float64
+	schedTimeAvgCount           uint64
 }
 
 type work struct {
@@ -104,14 +105,17 @@ func worker(ctx context.Context, cancel context.CancelFunc, w work) {
 
 func printStats(w work) {
 	for _, c := range w.clusters {
-		log.Printf("SIM: STATS: mid=%d, config=%s, arrivals=%d, sched_rejects=%d, agent_rejects=%d, avg_mem_util_hosts=%f, agent_rejects_cum_mem_util_hosts=%f\n",
+		log.Printf("SIM: STATS: mid=%d, config=%s, arrivals=%d, sched_rejects=%d, agent_rejects=%d, avg_mem_util_hosts=%f, agent_rejects_cum_mem_util_hosts=%f, sched_avg_us=%f, admit_avg_us=%f\n",
 			w.machineID,
 			c.name,
 			c.arrivalsCount,
 			c.schedulerRejectsCount,
 			c.agentRejectsCount,
 			c.avgHostsWorthOfMemUtil,
-			c.agentRejectsHostsWorthOfMem)
+			c.agentRejectsHostsWorthOfMem,
+			c.schedTimeAvgUsec,
+			c.admitTimeAvgUsec,
+		)
 	}
 }
 
@@ -223,7 +227,7 @@ func process(ctx context.Context, e traceEvent, clusters []*cluster) error {
 
 			p := newPodFromEvent(e, c.totHostMemBytes, c.totHostMilliCores)
 
-			o, err := c.scheduler.SimSchedulePod(ctx, p)
+			o, err := schedule(ctx, c, p)
 			if err != nil {
 				// TODO: check for fit error.
 				c.schedulerRejectsCount++
@@ -238,7 +242,7 @@ func process(ctx context.Context, e traceEvent, clusters []*cluster) error {
 			if err != nil {
 				return fmt.Errorf("got malformed host name %s from scheduler: %v\n", o.SuggestedHost, err)
 			}
-			if err := c.agents[i].Admit(p); err != nil {
+			if err := admit(c, i, p); err != nil {
 				c.agentRejectsCount++
 				c.agentRejectsHostsWorthOfMem += e.vmMem
 
@@ -276,6 +280,28 @@ func process(ctx context.Context, e traceEvent, clusters []*cluster) error {
 	}
 
 	return nil
+}
+
+func schedule(ctx context.Context, c *cluster, p *v1.Pod) (k8sched.ScheduleResult, error) {
+	t0 := time.Now()
+	r, err := c.scheduler.SimSchedulePod(ctx, p)
+	d := time.Since(t0).Microseconds()
+
+	c.schedTimeAvgCount++
+	c.schedTimeAvgUsec += (float64(d) - c.schedTimeAvgUsec) / float64(c.schedTimeAvgCount)
+
+	return r, err
+}
+
+func admit(c *cluster, i int64, p *v1.Pod) error {
+	t0 := time.Now()
+	err := c.agents[i].Admit(p)
+	d := time.Since(t0).Microseconds()
+
+	c.admitTimeAvgCount++
+	c.admitTimeAvgUsec += (float64(d) - c.admitTimeAvgUsec) / float64(c.admitTimeAvgCount)
+
+	return err
 }
 
 func newPodFromEvent(e traceEvent, hostBytes, hostMilliCPUs int64) *v1.Pod {
