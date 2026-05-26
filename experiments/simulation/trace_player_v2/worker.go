@@ -5,12 +5,16 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"math"
 	"strconv"
 	"strings"
 	"time"
 
 	k8sapi "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2"
 	k8sched "k8s.io/kubernetes/pkg/scheduler"
 )
@@ -38,9 +42,9 @@ type cluster struct {
 	scheduler *k8sched.Scheduler
 
 	// agent at index i runs on host at index i.
-	agents            []hostAgent
-	totHostMemBytes   int64
-	totHostMilliCores int64
+	agents          []hostAgent
+	totHostMemBytes int64
+	totHostCPUs     int64
 
 	// These two bools tell whether the percentage of CXL memory that VMs/pod request is taken from
 	// the Pond or GreenSKU version of the trace. They're mutually exclusive, and can both be false
@@ -225,7 +229,7 @@ func process(ctx context.Context, e traceEvent, clusters []*cluster) error {
 		if e.isArrival {
 			c.arrivalsCount++
 
-			p := newPodFromEvent(e, c.totHostMemBytes, c.totHostMilliCores)
+			p := newPodFromEvent(e, c.totHostMemBytes, c.totHostCPUs)
 
 			o, err := schedule(ctx, c, p)
 			if err != nil {
@@ -304,18 +308,68 @@ func admit(c *cluster, i int64, p *v1.Pod) error {
 	return err
 }
 
-func newPodFromEvent(e traceEvent, hostBytes, hostMilliCPUs int64) *v1.Pod {
+func newPodFromEvent(e traceEvent, hostBytes, hostCPUs int64) *v1.Pod {
 	podBytes := int64(float64(hostBytes) * e.vmMem)
-	podMilliCPUs := int64(float64(hostMilliCPUs) * e.vmCPUs)
+	podCPUsFlt := float64(hostCPUs) * e.vmCPUs
 
 	// Guaranteed Pods must request an integer number of cores to get exclusive CPUs by the CPU
 	// manager as per K8s API specification. But the raw trace data doesn't respect that
 	// constraint. We enforce it by rounding up.
-	if e.vmPriority == 0 && podMilliCPUs%1000 != 0 {
-		podMilliCPUs += 1000 - (podMilliCPUs % 1000)
+	var podCPUs int64
+	if e.vmPriority == 0 {
+		podCPUs = int64(math.Ceil(podCPUsFlt))
+	} else {
+		podCPUs = int64(podCPUsFlt)
 	}
 
-	// TODO: fix this back and forth between *1000 and /1000 (newPod expects the integral number of
-	// CPUs, not millicores).
-	return newPod(fmt.Sprintf("pod-%d", e.vmID), podBytes, podMilliCPUs/1000, e.vmPriority == 0)
+	return newPod(fmt.Sprintf("pod-%d", e.vmID), podBytes, podCPUs, e.vmPriority == 0)
+}
+
+// Note: CPUs unit is whole cores, not millicores.
+func newPod(name string, bytes, cpus int64, guaranteed bool) *v1.Pod {
+	p := &v1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: name,
+			UID:  types.UID(name),
+		},
+		Spec: v1.PodSpec{
+			SchedulerName: miniDefaultK8sScheduler,
+			Containers: []v1.Container{
+				{
+					Resources: v1.ResourceRequirements{
+						Requests: v1.ResourceList{
+							v1.ResourceCPU:    *resource.NewMilliQuantity(cpus*1000, resource.DecimalSI),
+							v1.ResourceMemory: *resource.NewQuantity(bytes, resource.BinarySI),
+						},
+					},
+				},
+			},
+		},
+	}
+
+	if guaranteed {
+		p.Spec.Containers[0].Resources.Limits = p.Spec.Containers[0].Resources.Requests.DeepCopy()
+	}
+
+	return p
+}
+
+func newHost(name string, bytes, cpus int64) *v1.Node {
+	return &v1.Node{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: name,
+			UID:  types.UID(name),
+		},
+		Status: v1.NodeStatus{
+			Capacity: v1.ResourceList{
+				v1.ResourceCPU:    *resource.NewMilliQuantity(cpus*1000, resource.DecimalSI),
+				v1.ResourceMemory: *resource.NewQuantity(bytes, resource.BinarySI),
+			},
+			Allocatable: v1.ResourceList{
+				v1.ResourceCPU:    *resource.NewMilliQuantity(cpus*1000, resource.DecimalSI),
+				v1.ResourceMemory: *resource.NewQuantity(bytes, resource.BinarySI),
+				v1.ResourcePods:   *resource.NewQuantity(110, resource.DecimalSI),
+			},
+		},
+	}
 }

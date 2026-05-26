@@ -12,10 +12,8 @@ import (
 	cadvisorapi "github.com/google/cadvisor/info/v1"
 	v1 "k8s.io/api/core/v1"
 	eventsv1 "k8s.io/api/events/v1"
-	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/informers"
 	clientsetfake "k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/tools/events"
@@ -223,21 +221,21 @@ func newClusterOrDie(ctx context.Context, name string, agent agentCfg, numHosts 
 	agents := make([]hostAgent, numHosts)
 	hosts := make([]runtime.Object, numHosts)
 
-	hostMilliCPUs := int64(hostResources.NumSockets) * int64(hostResources.SncWays) * int64(hostResources.CpusPerNNUMA) * 1000
+	hostCPUs := int64(hostResources.NumSockets) * int64(hostResources.SncWays) * int64(hostResources.CpusPerNNUMA)
 	hostBytes := int64(hostResources.NumSockets) * int64(hostResources.SncWays) * int64(hostResources.GiBsPerNNUMA) * (1 << 30)
 
 	mi := generateMachineInfo(&hostResources)
 
 	for i := range numHosts {
 		agents[i] = newHostAgentOrDie(mi, agent.TopologyManagerPolicy, agent.TopologyManagerOptions)
-		hosts[i] = newHost(fmt.Sprintf("host-%d", i), hostBytes, hostMilliCPUs)
+		hosts[i] = newHost(fmt.Sprintf("host-%d", i), hostBytes, hostCPUs)
 	}
 
 	return &cluster{
 		name:               name,
 		agents:             agents,
 		totHostMemBytes:    hostBytes,
-		totHostMilliCores:  hostMilliCPUs,
+		totHostCPUs:        hostCPUs,
 		scheduler:          newSchedulerOrDie(ctx, schedAlgo, hosts),
 		admittedVMIDToHost: make(map[int64]int),
 		admittedVMIDToPod:  make(map[int64]*v1.Pod),
@@ -335,55 +333,6 @@ func resourceFitSchedulingPluginCfg(fitType schedcfg.ScoringStrategyType) schedc
 			},
 		},
 	}
-}
-
-func newHost(name string, bytes, milliCPUs int64) *v1.Node {
-	return &v1.Node{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: name,
-			UID:  types.UID(name),
-		},
-		Status: v1.NodeStatus{
-			Capacity: v1.ResourceList{
-				v1.ResourceCPU:    *resource.NewMilliQuantity(milliCPUs, resource.DecimalSI),
-				v1.ResourceMemory: *resource.NewQuantity(bytes, resource.BinarySI),
-			},
-			Allocatable: v1.ResourceList{
-				v1.ResourceCPU:    *resource.NewMilliQuantity(milliCPUs, resource.DecimalSI),
-				v1.ResourceMemory: *resource.NewQuantity(bytes, resource.BinarySI),
-				v1.ResourcePods:   *resource.NewQuantity(110, resource.DecimalSI),
-			},
-		},
-	}
-}
-
-// Note: CPUs unit is whole cores, not millicores.
-func newPod(name string, bytes, cpusCores int64, guaranteed bool) *v1.Pod {
-	p := &v1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: name,
-			UID:  types.UID(name),
-		},
-		Spec: v1.PodSpec{
-			SchedulerName: miniDefaultK8sScheduler,
-			Containers: []v1.Container{
-				{
-					Resources: v1.ResourceRequirements{
-						Requests: v1.ResourceList{
-							v1.ResourceCPU:    *resource.NewMilliQuantity(cpusCores*1000, resource.DecimalSI),
-							v1.ResourceMemory: *resource.NewQuantity(bytes, resource.BinarySI),
-						},
-					},
-				},
-			},
-		},
-	}
-
-	if guaranteed {
-		p.Spec.Containers[0].Resources.Limits = p.Spec.Containers[0].Resources.Requests.DeepCopy()
-	}
-
-	return p
 }
 
 var _ events.EventSink = nopEventSink{}
