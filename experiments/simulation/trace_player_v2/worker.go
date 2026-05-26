@@ -5,8 +5,12 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"strconv"
+	"strings"
 
 	k8sapi "k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
+	"k8s.io/klog/v2"
 	k8sched "k8s.io/kubernetes/pkg/scheduler"
 )
 
@@ -24,14 +28,28 @@ type cluster struct {
 	scheduler *k8sched.Scheduler
 
 	// agent at index i runs on host at index i.
-	agents []hostAgent
-	hosts  []*k8sapi.Node
+	agents            []hostAgent
+	hosts             []*k8sapi.Node
+	totHostMemBytes   int64
+	totHostMilliCores int64
 
 	// These two bools tell whether the percentage of CXL memory that VMs/pod request is taken from
 	// the Pond or GreenSKU version of the trace. They're mutually exclusive, and can both be false
 	// (no VM/pod will use CXL).
 	pondCXL     bool
 	greenSKUCXL bool
+
+	admittedVMIDToHost map[int64]int
+	admittedVMIDToPod  map[int64]*k8sapi.Pod
+
+	// Some statistics that are updated during the simulation.
+	// todo: move arrivalsCount to the reader of a machineID since it's unique for a machine ID.
+	arrivalsCount               uint64
+	schedulerRejectsCount       uint64
+	agentRejectsCount           uint64
+	agentRejectsHostsWorthOfMem float64
+	curHostsWorthOfMemUtil      float64
+	// todo: admit times field.
 }
 
 type work struct {
@@ -42,7 +60,7 @@ type work struct {
 	outChans []chan<- traceEvent
 
 	// Event processor state.
-	clusters []cluster
+	clusters []*cluster
 	inChan   <-chan traceEvent
 }
 
@@ -78,7 +96,7 @@ func processEvents(ctx context.Context, cancel context.CancelFunc, w work) {
 				// trace (that sends us the trace events) encountered an error and quit early.
 				return
 			}
-			if err := process(event); err != nil {
+			if err := process(ctx, event, w.clusters); err != nil {
 				log.Printf("SIM: ERROR: processor of machine ID %d failed to process event: %v\n",
 					w.machineID, err)
 				cancel()
@@ -138,7 +156,7 @@ func readAndSendOrProcessEvents(ctx context.Context, w work) {
 		if len(w.outChans) == 0 {
 			// If we're here, this worker is both a reader and a processor of events, so we
 			// process them.
-			if err := process(e); err != nil {
+			if err := process(ctx, e, w.clusters); err != nil {
 				log.Printf("SIM: ERROR: processor of machine ID %d failed to process event: %v\n",
 					w.machineID, err)
 				return
@@ -163,7 +181,72 @@ func readAndSendOrProcessEvents(ctx context.Context, w work) {
 	}
 }
 
-func process(e traceEvent) error {
-	// TODO: implement me!
+func process(ctx context.Context, e traceEvent, clusters []*cluster) error {
+	for _, c := range clusters {
+		if e.isArrival {
+			c.arrivalsCount++
+
+			p := newPodFromEvent(e, c.totHostMemBytes, c.totHostMilliCores)
+
+			o, err := c.scheduler.SimSchedulePod(ctx, p)
+			if err != nil {
+				c.schedulerRejectsCount++
+				continue
+			}
+			p.Spec.NodeName = o.SuggestedHost
+
+			// TODO: this parsing/unparsing sucks, switch to storing hosts on a map keyed by name to
+			// avoid it. Hosts have name "host-<i>" where i is their index in the hosts array.
+			_, agentI, _ := strings.Cut(o.SuggestedHost, "-")
+			// TODO: check error and panic on it.
+			i, _ := strconv.ParseInt(agentI, 10, 64)
+
+			if err := c.agents[i].Admit(p); err != nil {
+				c.agentRejectsCount++
+				c.agentRejectsHostsWorthOfMem += e.vmMem
+				continue
+			}
+
+			if err := c.scheduler.Cache.AddPod(klog.Background(), p); err != nil {
+				return fmt.Errorf("scheduler failed to add pod %s to cache: %v", p.Name, err)
+			}
+
+			c.curHostsWorthOfMemUtil += e.vmMem
+
+			c.admittedVMIDToHost[e.vmID] = int(i)
+			c.admittedVMIDToPod[e.vmID] = p
+		} else {
+			if h, ok := c.admittedVMIDToHost[e.vmID]; ok {
+				pod := c.admittedVMIDToPod[e.vmID]
+				if err := c.agents[h].HandleDeparture(pod.Name); err != nil {
+					return fmt.Errorf("agent failed to remove %s: %w", pod.Name, err)
+				}
+				if err := c.scheduler.Cache.RemovePod(klog.Background(), pod); err != nil {
+					return fmt.Errorf("scheduler failed to remove %s: %w", pod.Name, err)
+				}
+				delete(c.admittedVMIDToHost, e.vmID)
+				delete(c.admittedVMIDToPod, e.vmID)
+				// e.vmMem is negative for departure events, so we can just add it.
+				c.curHostsWorthOfMemUtil += e.vmMem
+			}
+		}
+	}
+
 	return nil
+}
+
+func newPodFromEvent(e traceEvent, hostBytes, hostMilliCPUs int64) *v1.Pod {
+	podBytes := int64(float64(hostBytes) * e.vmMem)
+	podMilliCPUs := int64(float64(hostMilliCPUs) * e.vmCPUs)
+
+	// Guaranteed Pods must request an integer number of cores to get exclusive CPUs by the CPU
+	// manager as per K8s API specification. But the raw trace data doesn't respect that
+	// constraint. We enforce it by rounding up.
+	if e.vmPriority == 0 && podMilliCPUs%1000 != 0 {
+		podMilliCPUs += 1000 - (podMilliCPUs % 1000)
+	}
+
+	// TODO: fix this back and forth between *1000 and /1000 (newPod expects the integral number of
+	// CPUs, not millicores).
+	return newPod(fmt.Sprintf("pod-%d", e.vmID), podBytes, podMilliCPUs/1000, e.vmPriority == 0)
 }

@@ -129,7 +129,7 @@ func prepareWorkOrDie(ctx context.Context, db *sql.DB, cfg *Cfg, numWorkers int)
 		if i >= numWorkers-len(cfg.Clusters) {
 			// If we're here readers of trace events are also processors of events.
 			numClusters := len(c.Specs) * len(cfg.Agents) * len(cfg.HostResources)
-			w.clusters = make([]cluster, numClusters)
+			w.clusters = make([]*cluster, numClusters)
 
 			for agentI, agent := range cfg.Agents {
 				for specI, spec := range c.Specs {
@@ -175,7 +175,7 @@ func prepareWorkOrDie(ctx context.Context, db *sql.DB, cfg *Cfg, numWorkers int)
 		}
 		endClusterIdx := startClusterIdx + numClustersForThisProcessor
 
-		thisProcClusters := make([]cluster, numClustersForThisProcessor)
+		thisProcClusters := make([]*cluster, numClustersForThisProcessor)
 
 		// TODO: this loop is perversely inefficient, speed it up.
 	outer:
@@ -214,7 +214,7 @@ func prepareWorkOrDie(ctx context.Context, db *sql.DB, cfg *Cfg, numWorkers int)
 	return workItems, workLeftovers
 }
 
-func newClusterOrDie(ctx context.Context, agent agentCfg, numHosts int, schedAlgo string, hostResources hostResourcesCfg) cluster {
+func newClusterOrDie(ctx context.Context, agent agentCfg, numHosts int, schedAlgo string, hostResources hostResourcesCfg) *cluster {
 	agents := make([]hostAgent, numHosts)
 	hosts := make([]*v1.Node, numHosts)
 	hostsAsObjs := make([]runtime.Object, numHosts)
@@ -230,10 +230,14 @@ func newClusterOrDie(ctx context.Context, agent agentCfg, numHosts int, schedAlg
 		hostsAsObjs[i] = hosts[i]
 	}
 
-	return cluster{
-		agents:    agents,
-		hosts:     hosts,
-		scheduler: newSchedulerOrDie(ctx, schedAlgo, hostsAsObjs),
+	return &cluster{
+		agents:             agents,
+		hosts:              hosts,
+		totHostMemBytes:    hostBytes,
+		totHostMilliCores:  hostMilliCPUs,
+		scheduler:          newSchedulerOrDie(ctx, schedAlgo, hostsAsObjs),
+		admittedVMIDToHost: make(map[int64]int),
+		admittedVMIDToPod:  make(map[int64]*v1.Pod),
 	}
 }
 
