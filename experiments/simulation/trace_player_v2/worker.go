@@ -14,6 +14,13 @@ import (
 	k8sched "k8s.io/kubernetes/pkg/scheduler"
 )
 
+const (
+	queryFmt = `SELECT vmId, priority, cores, memory, cxl_mem_percent_pond, cxl_mem_percent_greensku ` +
+		`FROM "events-machine-id-%d" ORDER BY time`
+
+	loggingPeriodEvents = 50000
+)
+
 type traceEvent struct {
 	isArrival               bool
 	vmID                    int64
@@ -53,6 +60,8 @@ type cluster struct {
 	curHostsWorthOfMemUtil      float64
 	avgHostsWorthOfMemUtil      float64
 	avgHostsWorthOfMemUtilCount uint64
+	admitTimeAvg                float64
+	scheduleTimeAvg             float64
 	// todo: admit times field.
 }
 
@@ -138,9 +147,7 @@ func readAndSendOrProcessEvents(ctx context.Context, w work) {
 	}()
 
 	// Query the DB for the trace/machineID this worker is responsible for.
-	// TODO: the query format should be a const.
-	query := fmt.Sprintf(`SELECT vmId, priority, cores, memory, cxl_mem_percent_pond, cxl_mem_percent_greensku `+
-		`FROM "events-machine-id-%d" ORDER BY time`, w.machineID)
+	query := fmt.Sprintf(queryFmt, w.machineID)
 	trace, err := w.db.Query(query)
 	if err != nil {
 		log.Printf("SIM: ERROR: reader of machine ID %d failed to run query \"%s\": %v\n",
@@ -198,8 +205,7 @@ func readAndSendOrProcessEvents(ctx context.Context, w work) {
 		}
 
 		eventsRead++
-		// todo: put the logging period in a const.
-		if eventsRead%400000 == 0 {
+		if eventsRead%loggingPeriodEvents == 0 {
 			log.Printf("SIM: mid=%d dispatched %d events\n", w.machineID, eventsRead)
 		}
 	}
