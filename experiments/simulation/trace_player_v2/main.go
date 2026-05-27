@@ -3,11 +3,16 @@ package main
 import (
 	"context"
 	"database/sql"
+	"encoding/csv"
 	"fmt"
 	"io"
 	"log"
+	"os"
+	"sort"
+	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	cadvisorapi "github.com/google/cadvisor/info/v1"
 	v1 "k8s.io/api/core/v1"
@@ -93,20 +98,125 @@ func main() {
 
 	wg.Wait()
 
-	// printResultsOrDie(workItems)
+	printResultsOrDie(workItems)
 }
 
 // TODO: make this perversely inefficient function more efficient.
-// func printResultsOrDie(workItems []work) {
-// 	ts := time.Now().Format("2006-01-02_15-04-05")
+func printResultsOrDie(workItems []work) {
+	ts := time.Now().Format("2006-01-02_15-04-05")
 
-// 	for _, w := range workItems {
-// 		for _, c := range w.clusters {
+	for _, w := range workItems {
+		for _, c := range w.clusters {
+			fileName := fmt.Sprintf("results/%s-%s-%s-%s.csv", w.machineID, c.schedAlgo, c.hostType, ts)
 
-// 			fileName := fmt.Sprintf("%s-%s\n", w.machineID, c.name)
-// 		}
-// 	}
-// }
+			f, err := os.OpenFile(fileName, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
+			if err != nil {
+				log.Fatalf("failed to open results file %s: %v\n", fileName, err)
+			}
+
+			func() {
+				defer func() {
+					if err := f.Close(); err != nil {
+						log.Printf("failed to close results file %s: %v\n", fileName, err)
+					}
+				}()
+
+				info, err := f.Stat()
+				if err != nil {
+					log.Fatalf("failed to stat results file %s: %v\n", fileName, err)
+				}
+
+				wtr := csv.NewWriter(f)
+
+				if info.Size() == 0 {
+					if err := wtr.Write([]string{
+						"agent",
+						"arrivalsCount",
+						"schedulerRejectsCount",
+						"agentRejectsCount",
+						"agentRejectsHostsWorthOfMem",
+						"avgHostsWorthOfMemUtil",
+						"admitTimeAvgUsec",
+						"schedTimeAvgUsec",
+					}); err != nil {
+						log.Fatalf("failed to write summary header to %s: %v\n", fileName, err)
+					}
+				}
+
+				if err := wtr.Write([]string{
+					c.agentName,
+					strconv.FormatUint(c.arrivalsCount, 10),
+					strconv.FormatUint(c.schedulerRejectsCount, 10),
+					strconv.FormatUint(c.agentRejectsCount, 10),
+					strconv.FormatFloat(c.agentRejectsHostsWorthOfMem, 'f', -1, 64),
+					strconv.FormatFloat(c.avgHostsWorthOfMemUtil, 'f', -1, 64),
+					strconv.FormatFloat(c.admitTimeAvgUsec, 'f', -1, 64),
+					strconv.FormatFloat(c.schedTimeAvgUsec, 'f', -1, 64),
+				}); err != nil {
+					log.Fatalf("failed to write summary row to %s: %v\n", fileName, err)
+				}
+
+				wtr.Flush()
+				if err := wtr.Error(); err != nil {
+					log.Fatalf("failed to flush summary csv writer for %s: %v\n", fileName, err)
+				}
+			}()
+		}
+	}
+
+	for _, w := range workItems {
+		for _, c := range w.clusters {
+			fileName := fmt.Sprintf("results/%s-%s-%s-%s.csv", w.machineID, c.schedAlgo, c.hostType, ts)
+
+			f, err := os.OpenFile(fileName, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
+			if err != nil {
+				log.Fatalf("failed to reopen results file %s: %v\n", fileName, err)
+			}
+
+			func() {
+				defer func() {
+					if err := f.Close(); err != nil {
+						log.Printf("failed to close results file %s: %v\n", fileName, err)
+					}
+				}()
+
+				wtr := csv.NewWriter(f)
+
+				if err := wtr.Write([]string{}); err != nil {
+					log.Fatalf("failed to write blank row to %s: %v\n", fileName, err)
+				}
+
+				if err := wtr.Write([]string{c.agentName, ""}); err != nil {
+					log.Fatalf("failed to write agent section header to %s: %v\n", fileName, err)
+				}
+
+				if err := wtr.Write([]string{"reject_reason", "count"}); err != nil {
+					log.Fatalf("failed to write reject-reason header to %s: %v\n", fileName, err)
+				}
+
+				rejectReasons := make([]string, 0, len(c.agentRejectReasonToCount))
+				for reason := range c.agentRejectReasonToCount {
+					rejectReasons = append(rejectReasons, reason)
+				}
+				sort.Strings(rejectReasons)
+
+				for _, reason := range rejectReasons {
+					if err := wtr.Write([]string{
+						reason,
+						strconv.FormatUint(c.agentRejectReasonToCount[reason], 10),
+					}); err != nil {
+						log.Fatalf("failed to write reject-reason row to %s: %v\n", fileName, err)
+					}
+				}
+
+				wtr.Flush()
+				if err := wtr.Error(); err != nil {
+					log.Fatalf("failed to flush reject-reason csv writer for %s: %v\n", fileName, err)
+				}
+			}()
+		}
+	}
+}
 
 func connectToTraceDBOrDie(dbFile string, numConns int) (*sql.DB, func()) {
 	db, err := sql.Open("sqlite", "file:"+dbFile+"?mode=ro")
