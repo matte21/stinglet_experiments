@@ -111,9 +111,10 @@ func newCPUMgrOrDie(tm topologymanager.Manager,
 	mi *cadvisorapi.MachineInfo, stateFileDir string) cpumanager.Manager {
 
 	policy := "static"
-	policyOpts := map[string]string{
-		cpumanager.FullPCPUsOnlyOption: "true",
-	}
+	// policyOpts := map[string]string{
+	// 	cpumanager.FullPCPUsOnlyOption: "true",
+	// }
+	policyOpts := map[string]string{}
 
 	// Use K8s default period.
 	cpuMgrReconcilePeriod := 10 * time.Second
