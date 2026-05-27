@@ -107,7 +107,7 @@ func printResultsOrDie(workItems []work) {
 
 	for _, w := range workItems {
 		for _, c := range w.clusters {
-			fileName := fmt.Sprintf("results/%s-%s-%s-%s.csv", w.machineID, c.schedAlgo, c.hostType, ts)
+			fileName := fmt.Sprintf("results/%d-%s-%s-%s.csv", w.machineID, c.schedAlgo, c.hostType, ts)
 
 			f, err := os.OpenFile(fileName, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
 			if err != nil {
