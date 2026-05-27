@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/go-logr/logr"
 	cadvisorapi "github.com/google/cadvisor/info/v1"
 	v1 "k8s.io/api/core/v1"
 	eventsv1 "k8s.io/api/events/v1"
@@ -52,6 +53,7 @@ const (
 
 func main() {
 	klog.SetOutput(io.Discard)
+	klog.SetLogger(logr.Discard())
 
 	log.Printf("SIM: Running %s\n", Version)
 
@@ -244,6 +246,8 @@ func connectToTraceDBOrDie(dbFile string, numConns int) (*sql.DB, func()) {
 
 // TODO: fix naming inside the following function: we use "cluster" to mean two completely separate
 // things.
+// TODO: this function assumes that numWorkers <= num of effective work items. If the assumption
+// isn't met it's buggy. But it should be easy to fix that: at some point, do that.
 func prepareWorkOrDie(ctx context.Context, db *sql.DB, cfg *Cfg, numWorkers int) ([]work, map[int]struct{}) {
 	numWorkItems := numWorkers
 	if numWorkers < len(cfg.Clusters) {
