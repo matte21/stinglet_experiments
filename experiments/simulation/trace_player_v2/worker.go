@@ -74,6 +74,9 @@ type cluster struct {
 	admitTimeAvgCount           uint64
 	schedTimeAvgUsec            float64
 	schedTimeAvgCount           uint64
+
+	schedRejectAvgMemRatio float64
+	agentRejectAvgMemRatio float64
 }
 
 type work struct {
@@ -244,6 +247,7 @@ func process(ctx context.Context, e traceEvent, clusters []*cluster) error {
 				var fitErr *k8schedfwk.FitError
 				if errors.As(err, &fitErr) {
 					c.schedulerRejectsCount++
+					c.schedRejectAvgMemRatio += (e.vmMem - c.schedRejectAvgMemRatio) / float64(c.schedulerRejectsCount)
 					continue
 				}
 				return fmt.Errorf("scheduling of pod %s failed with error other than fit error: %w", p.Name, err)
@@ -265,6 +269,8 @@ func process(ctx context.Context, e traceEvent, clusters []*cluster) error {
 				c.avgHostsWorthOfMemUtil += (c.curHostsWorthOfMemUtil - c.avgHostsWorthOfMemUtil) / float64(c.avgHostsWorthOfMemUtilCount)
 
 				c.agentRejectReasonToCount[rejectReason]++
+
+				c.agentRejectAvgMemRatio += (e.vmMem - c.agentRejectAvgMemRatio) / float64(c.agentRejectsCount)
 
 				continue
 			}

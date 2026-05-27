@@ -138,6 +138,8 @@ func printResultsOrDie(workItems []work) {
 						"avgHostsWorthOfMemUtil",
 						"admitTimeAvgUsec",
 						"schedTimeAvgUsec",
+						"schedRejectAvgMemRatio",
+						"agentRejectAvgMemRatio",
 					}); err != nil {
 						log.Fatalf("failed to write summary header to %s: %v\n", fileName, err)
 					}
@@ -152,6 +154,8 @@ func printResultsOrDie(workItems []work) {
 					strconv.FormatFloat(c.avgHostsWorthOfMemUtil, 'f', -1, 64),
 					strconv.FormatFloat(c.admitTimeAvgUsec, 'f', -1, 64),
 					strconv.FormatFloat(c.schedTimeAvgUsec, 'f', -1, 64),
+					strconv.FormatFloat(c.schedRejectAvgMemRatio, 'f', -1, 64),
+					strconv.FormatFloat(c.agentRejectAvgMemRatio, 'f', -1, 64),
 				}); err != nil {
 					log.Fatalf("failed to write summary row to %s: %v\n", fileName, err)
 				}
