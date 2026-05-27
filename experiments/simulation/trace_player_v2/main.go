@@ -136,6 +136,7 @@ func printResultsOrDie(workItems []work) {
 						"agentRejectsCount",
 						"agentRejectsHostsWorthOfMem",
 						"avgHostsWorthOfMemUtil",
+						"avgHostsWorthOfCPUUtil",
 						"admitTimeAvgUsec",
 						"schedTimeAvgUsec",
 						"schedRejectAvgMemRatio",
@@ -152,6 +153,7 @@ func printResultsOrDie(workItems []work) {
 					strconv.FormatUint(c.agentRejectsCount, 10),
 					strconv.FormatFloat(c.agentRejectsHostsWorthOfMem, 'f', -1, 64),
 					strconv.FormatFloat(c.avgHostsWorthOfMemUtil, 'f', -1, 64),
+					strconv.FormatFloat(c.avgHostsWorthOfCPUUtil, 'f', -1, 64),
 					strconv.FormatFloat(c.admitTimeAvgUsec, 'f', -1, 64),
 					strconv.FormatFloat(c.schedTimeAvgUsec, 'f', -1, 64),
 					strconv.FormatFloat(c.schedRejectAvgMemRatio, 'f', -1, 64),
@@ -170,7 +172,7 @@ func printResultsOrDie(workItems []work) {
 
 	for _, w := range workItems {
 		for _, c := range w.clusters {
-			fileName := fmt.Sprintf("results/%s-%s-%s-%s.csv", w.machineID, c.schedAlgo, c.hostType, ts)
+			fileName := fmt.Sprintf("results/%d-%s-%s-%s.csv", w.machineID, c.schedAlgo, c.hostType, ts)
 
 			f, err := os.OpenFile(fileName, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
 			if err != nil {

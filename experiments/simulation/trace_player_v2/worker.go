@@ -68,8 +68,10 @@ type cluster struct {
 	agentRejectsCount           uint64
 	agentRejectsHostsWorthOfMem float64
 	curHostsWorthOfMemUtil      float64
+	curHostsWorthOfCPUUtil      float64
 	avgHostsWorthOfMemUtil      float64
 	avgHostsWorthOfMemUtilCount uint64
+	avgHostsWorthOfCPUUtil      float64
 	admitTimeAvgUsec            float64
 	admitTimeAvgCount           uint64
 	schedTimeAvgUsec            float64
@@ -267,6 +269,7 @@ func process(ctx context.Context, e traceEvent, clusters []*cluster) error {
 
 				c.avgHostsWorthOfMemUtilCount++
 				c.avgHostsWorthOfMemUtil += (c.curHostsWorthOfMemUtil - c.avgHostsWorthOfMemUtil) / float64(c.avgHostsWorthOfMemUtilCount)
+				c.avgHostsWorthOfCPUUtil += (c.curHostsWorthOfCPUUtil - c.avgHostsWorthOfCPUUtil) / float64(c.avgHostsWorthOfMemUtilCount)
 
 				c.agentRejectReasonToCount[rejectReason]++
 
@@ -283,8 +286,10 @@ func process(ctx context.Context, e traceEvent, clusters []*cluster) error {
 			c.admittedVMIDToPod[e.vmID] = p
 
 			c.curHostsWorthOfMemUtil += e.vmMem
+			c.curHostsWorthOfCPUUtil += e.vmCPUs
 			c.avgHostsWorthOfMemUtilCount++
 			c.avgHostsWorthOfMemUtil += (c.curHostsWorthOfMemUtil - c.avgHostsWorthOfMemUtil) / float64(c.avgHostsWorthOfMemUtilCount)
+			c.avgHostsWorthOfCPUUtil += (c.curHostsWorthOfCPUUtil - c.avgHostsWorthOfCPUUtil) / float64(c.avgHostsWorthOfMemUtilCount)
 		} else {
 			if h, ok := c.admittedVMIDToHost[e.vmID]; ok {
 				pod := c.admittedVMIDToPod[e.vmID]
@@ -298,6 +303,7 @@ func process(ctx context.Context, e traceEvent, clusters []*cluster) error {
 				delete(c.admittedVMIDToPod, e.vmID)
 				// e.vmMem is negative for departure events, so we can just add it.
 				c.curHostsWorthOfMemUtil += e.vmMem
+				c.curHostsWorthOfCPUUtil += e.vmCPUs
 			}
 		}
 	}
