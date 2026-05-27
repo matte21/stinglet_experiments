@@ -380,6 +380,9 @@ func newPod(name string, bytes, cpus int64, guaranteed bool) *v1.Pod {
 }
 
 func newHost(name string, bytes, cpus int64) *v1.Node {
+	allocCPUs := cpus - reservedCPUs
+	allocBytes := bytes - reservedMemBytes
+
 	return &v1.Node{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: name,
@@ -391,8 +394,8 @@ func newHost(name string, bytes, cpus int64) *v1.Node {
 				v1.ResourceMemory: *resource.NewQuantity(bytes, resource.BinarySI),
 			},
 			Allocatable: v1.ResourceList{
-				v1.ResourceCPU:    *resource.NewMilliQuantity(cpus*1000, resource.DecimalSI),
-				v1.ResourceMemory: *resource.NewQuantity(bytes, resource.BinarySI),
+				v1.ResourceCPU:    *resource.NewMilliQuantity(allocCPUs*1000, resource.DecimalSI),
+				v1.ResourceMemory: *resource.NewQuantity(allocBytes, resource.BinarySI),
 				v1.ResourcePods:   *resource.NewQuantity(110, resource.DecimalSI),
 			},
 		},

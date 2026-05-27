@@ -30,8 +30,6 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-const miniDefaultK8sScheduler = "mini-default-k8s-sched"
-
 var Version = "dev"
 
 type hostAgent interface {
@@ -41,11 +39,15 @@ type hostAgent interface {
 
 // Note: currently we assume that SMT is enabled with two threads per core.
 const (
-	threadsPerCore = 2
+	threadsPerCore   = 2
+	reservedCPUs     = threadsPerCore
+	reservedMemBytes = 1 << 12
 	// The following values are taken from S4.
 	intraNUMADistance   = 10
 	intraSocketDistance = 12
 	outOfSocketDistance = 21
+
+	miniDefaultK8sScheduler = "mini-default-k8s-sched"
 )
 
 func main() {
