@@ -30,9 +30,6 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-// TODO: consider using a context with cancel for the scheduler since we plan to reuse the
-// same scheduler to play multiple independent traces.
-
 const miniDefaultK8sScheduler = "mini-default-k8s-sched"
 
 var Version = "dev"
