@@ -39,7 +39,9 @@ type traceEvent struct {
 }
 
 type cluster struct {
-	name string
+	schedAlgo string
+	agentName string
+	hostType  string
 
 	scheduler *k8sched.Scheduler
 
@@ -113,9 +115,11 @@ func worker(ctx context.Context, cancel context.CancelFunc, w work) {
 
 func printStats(w work) {
 	for _, c := range w.clusters {
-		log.Printf("SIM: STATS: mid=%d, config=%s, arrivals=%d, sched_rejects=%d, agent_rejects=%d, avg_mem_util_hosts=%f, agent_rejects_cum_mem_util_hosts=%f, sched_avg_us=%f, admit_avg_us=%f\n",
+		log.Printf("SIM: STATS: mid=%d, config=%s-%s-%s, arrivals=%d, sched_rejects=%d, agent_rejects=%d, avg_mem_util_hosts=%f, agent_rejects_cum_mem_util_hosts=%f, sched_avg_us=%f, admit_avg_us=%f\n",
 			w.machineID,
-			c.name,
+			c.schedAlgo,
+			c.agentName,
+			c.hostType,
 			c.arrivalsCount,
 			c.schedulerRejectsCount,
 			c.agentRejectsCount,

@@ -92,7 +92,21 @@ func main() {
 	}
 
 	wg.Wait()
+
+	// printResultsOrDie(workItems)
 }
+
+// TODO: make this perversely inefficient function more efficient.
+// func printResultsOrDie(workItems []work) {
+// 	ts := time.Now().Format("2006-01-02_15-04-05")
+
+// 	for _, w := range workItems {
+// 		for _, c := range w.clusters {
+
+// 			fileName := fmt.Sprintf("%s-%s\n", w.machineID, c.name)
+// 		}
+// 	}
+// }
 
 func connectToTraceDBOrDie(dbFile string, numConns int) (*sql.DB, func()) {
 	db, err := sql.Open("sqlite", "file:"+dbFile+"?mode=ro")
@@ -136,8 +150,7 @@ func prepareWorkOrDie(ctx context.Context, db *sql.DB, cfg *Cfg, numWorkers int)
 				for specI, spec := range c.Specs {
 					for hostResI, hostResources := range cfg.HostResources {
 						clusterIdx := agentI*len(c.Specs)*len(cfg.HostResources) + specI*len(cfg.HostResources) + hostResI
-						name := fmt.Sprintf("%s-%s-%s", spec.SchedulingAlgo, agent.Name, hostResources.Name)
-						w.clusters[clusterIdx] = newClusterOrDie(ctx, name, agent, spec.NumHosts, spec.SchedulingAlgo, hostResources)
+						w.clusters[clusterIdx] = newClusterOrDie(ctx, spec.SchedulingAlgo, agent.Name, hostResources.Name, agent, spec.NumHosts, hostResources)
 					}
 				}
 			}
@@ -191,8 +204,7 @@ func prepareWorkOrDie(ctx context.Context, db *sql.DB, cfg *Cfg, numWorkers int)
 					if clusterIdx >= endClusterIdx {
 						break outer
 					}
-					name := fmt.Sprintf("%s-%s-%s", spec.SchedulingAlgo, agent.Name, hostResources.Name)
-					thisProcClusters[clusterIdx-startClusterIdx] = newClusterOrDie(ctx, name, agent, spec.NumHosts, spec.SchedulingAlgo, hostResources)
+					thisProcClusters[clusterIdx-startClusterIdx] = newClusterOrDie(ctx, spec.SchedulingAlgo, agent.Name, hostResources.Name, agent, spec.NumHosts, hostResources)
 				}
 			}
 		}
@@ -217,7 +229,7 @@ func prepareWorkOrDie(ctx context.Context, db *sql.DB, cfg *Cfg, numWorkers int)
 	return workItems, workLeftovers
 }
 
-func newClusterOrDie(ctx context.Context, name string, agent agentCfg, numHosts int, schedAlgo string, hostResources hostResourcesCfg) *cluster {
+func newClusterOrDie(ctx context.Context, schedAlgo, agentName, hostType string, agent agentCfg, numHosts int, hostResources hostResourcesCfg) *cluster {
 	agents := make([]hostAgent, numHosts)
 	hosts := make([]runtime.Object, numHosts)
 
@@ -232,7 +244,9 @@ func newClusterOrDie(ctx context.Context, name string, agent agentCfg, numHosts 
 	}
 
 	return &cluster{
-		name:                     name,
+		schedAlgo:                schedAlgo,
+		agentName:                agentName,
+		hostType:                 hostType,
 		agents:                   agents,
 		totHostMemBytes:          hostBytes,
 		totHostCPUs:              hostCPUs,
