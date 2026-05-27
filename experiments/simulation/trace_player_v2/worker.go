@@ -29,6 +29,7 @@ const (
 )
 
 type traceEvent struct {
+	dumpAvgs                bool
 	isArrival               bool
 	vmID                    int64
 	vmPriority              int64
@@ -147,7 +148,7 @@ func processEvents(ctx context.Context, cancel context.CancelFunc, w work) {
 				// trace (that sends us the trace events) encountered an error and quit early.
 				return
 			}
-			if err := process(ctx, event, w.clusters); err != nil {
+			if err := process(ctx, w.machineID, event, w.clusters); err != nil {
 				log.Printf("SIM: ERROR: processor of machine ID %d failed to process event: %v\n",
 					w.machineID, err)
 				cancel()
@@ -204,10 +205,16 @@ func readAndSendOrProcessEvents(ctx context.Context, w work) {
 		// VM.
 		e.isArrival = e.vmCPUs > 0
 
+		eventsRead++
+		if eventsRead%loggingPeriodEvents == 1 && eventsRead > 1 {
+			log.Printf("SIM: mid=%d processed %d events\n", w.machineID, eventsRead-1)
+			e.dumpAvgs = true
+		}
+
 		if len(w.outChans) == 0 {
 			// If we're here, this worker is both a reader and a processor of events, so we
 			// process them.
-			if err := process(ctx, e, w.clusters); err != nil {
+			if err := process(ctx, w.machineID, e, w.clusters); err != nil {
 				log.Printf("SIM: ERROR: processor of machine ID %d failed to process event: %v\n",
 					w.machineID, err)
 				return
@@ -225,10 +232,7 @@ func readAndSendOrProcessEvents(ctx context.Context, w work) {
 			}
 		}
 
-		eventsRead++
-		if eventsRead%loggingPeriodEvents == 0 {
-			log.Printf("SIM: mid=%d dispatched %d events\n", w.machineID, eventsRead)
-		}
+		e.dumpAvgs = false
 	}
 
 	if err := trace.Err(); err != nil {
@@ -237,8 +241,20 @@ func readAndSendOrProcessEvents(ctx context.Context, w work) {
 	}
 }
 
-func process(ctx context.Context, e traceEvent, clusters []*cluster) error {
+func process(ctx context.Context, mid int, e traceEvent, clusters []*cluster) error {
 	for _, c := range clusters {
+		if e.dumpAvgs {
+			log.Printf("SIM: Worker %d-%s-%s-%s, schedulerRejectsCount=%d, agentRejectsCount=%d, avgHostsWorthOfCPUUtil=%f, avgHostsWorthOfMemUtil=%f\n",
+				mid,
+				c.schedAlgo,
+				c.hostType,
+				c.agentName,
+				c.schedulerRejectsCount,
+				c.agentRejectsCount,
+				c.avgHostsWorthOfCPUUtil,
+				c.avgHostsWorthOfMemUtil)
+		}
+
 		if e.isArrival {
 			c.arrivalsCount++
 
