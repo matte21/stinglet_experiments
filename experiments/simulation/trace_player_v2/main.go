@@ -12,7 +12,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/go-logr/logr"
 	cadvisorapi "github.com/google/cadvisor/info/v1"
@@ -104,11 +103,9 @@ func main() {
 
 // TODO: make this perversely inefficient function more efficient.
 func printResultsOrDie(workItems []work) {
-	ts := time.Now().Format("2006-01-02_15-04-05")
-
 	for _, w := range workItems {
 		for _, c := range w.clusters {
-			fileName := fmt.Sprintf("results/%d-%s-%s-%s.csv", w.machineID, c.schedAlgo, c.hostType, ts)
+			fileName := fmt.Sprintf("%s/%s-%d-%s-%s.csv", *outputDir, *outputFilePrefix, w.machineID, c.schedAlgo, c.hostType)
 
 			f, err := os.OpenFile(fileName, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
 			if err != nil {
@@ -173,7 +170,7 @@ func printResultsOrDie(workItems []work) {
 
 	for _, w := range workItems {
 		for _, c := range w.clusters {
-			fileName := fmt.Sprintf("results/%d-%s-%s-%s.csv", w.machineID, c.schedAlgo, c.hostType, ts)
+			fileName := fmt.Sprintf("%s/%s-%d-%s-%s.csv", *outputDir, *outputFilePrefix, w.machineID, c.schedAlgo, c.hostType)
 
 			f, err := os.OpenFile(fileName, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
 			if err != nil {

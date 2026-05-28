@@ -13,6 +13,8 @@ var (
 	cfgFile    = flag.String("config-file", "", "path to YAML config file (required)")
 	numWorkers = flag.Int("num-workers", runtime.GOMAXPROCS(0),
 		"number of worker goroutines (default: GOMAXPROCS)")
+	outputDir        = flag.String("output-dir", "", "path to pre-existing directory where results files are written (required)")
+	outputFilePrefix = flag.String("output-file-prefix", "", "prefix to prepend to the name of each output file (required)")
 )
 
 func parseFlagsOrDie() {
@@ -26,5 +28,12 @@ func parseFlagsOrDie() {
 	}
 	if *numWorkers <= 0 {
 		log.Fatal("SIM: --num-workers must be > 0")
+	}
+
+	if *outputDir == "" {
+		log.Fatal("SIM: --output-dir is required")
+	}
+	if *outputFilePrefix == "" {
+		log.Fatal("SIM: --output-file-prefix is required")
 	}
 }
