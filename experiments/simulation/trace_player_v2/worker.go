@@ -80,6 +80,8 @@ type cluster struct {
 
 	schedRejectAvgMemRatio float64
 	agentRejectAvgMemRatio float64
+
+	utilSamplingOn bool
 }
 
 type work struct {
@@ -266,6 +268,10 @@ func process(ctx context.Context, mid int, e traceEvent, clusters []*cluster) er
 				if errors.As(err, &fitErr) {
 					c.schedulerRejectsCount++
 					c.schedRejectAvgMemRatio += (e.vmMem - c.schedRejectAvgMemRatio) / float64(c.schedulerRejectsCount)
+
+					// Cluster has reached steady state: start sampling utilization.
+					c.utilSamplingOn = true
+
 					continue
 				}
 				return fmt.Errorf("scheduling of pod %s failed with error other than fit error: %w", p.Name, err)
@@ -283,9 +289,11 @@ func process(ctx context.Context, mid int, e traceEvent, clusters []*cluster) er
 				c.agentRejectsCount++
 				c.agentRejectsHostsWorthOfMem += e.vmMem
 
-				c.avgHostsWorthOfMemUtilCount++
-				c.avgHostsWorthOfMemUtil += (c.curHostsWorthOfMemUtil - c.avgHostsWorthOfMemUtil) / float64(c.avgHostsWorthOfMemUtilCount)
-				c.avgHostsWorthOfCPUUtil += (c.curHostsWorthOfCPUUtil - c.avgHostsWorthOfCPUUtil) / float64(c.avgHostsWorthOfMemUtilCount)
+				if c.utilSamplingOn {
+					c.avgHostsWorthOfMemUtilCount++
+					c.avgHostsWorthOfMemUtil += (c.curHostsWorthOfMemUtil - c.avgHostsWorthOfMemUtil) / float64(c.avgHostsWorthOfMemUtilCount)
+					c.avgHostsWorthOfCPUUtil += (c.curHostsWorthOfCPUUtil - c.avgHostsWorthOfCPUUtil) / float64(c.avgHostsWorthOfMemUtilCount)
+				}
 
 				c.agentRejectReasonToCount[rejectReason]++
 
@@ -303,9 +311,12 @@ func process(ctx context.Context, mid int, e traceEvent, clusters []*cluster) er
 
 			c.curHostsWorthOfMemUtil += e.vmMem
 			c.curHostsWorthOfCPUUtil += e.vmCPUs
-			c.avgHostsWorthOfMemUtilCount++
-			c.avgHostsWorthOfMemUtil += (c.curHostsWorthOfMemUtil - c.avgHostsWorthOfMemUtil) / float64(c.avgHostsWorthOfMemUtilCount)
-			c.avgHostsWorthOfCPUUtil += (c.curHostsWorthOfCPUUtil - c.avgHostsWorthOfCPUUtil) / float64(c.avgHostsWorthOfMemUtilCount)
+
+			if c.utilSamplingOn {
+				c.avgHostsWorthOfMemUtilCount++
+				c.avgHostsWorthOfMemUtil += (c.curHostsWorthOfMemUtil - c.avgHostsWorthOfMemUtil) / float64(c.avgHostsWorthOfMemUtilCount)
+				c.avgHostsWorthOfCPUUtil += (c.curHostsWorthOfCPUUtil - c.avgHostsWorthOfCPUUtil) / float64(c.avgHostsWorthOfMemUtilCount)
+			}
 		} else {
 			if h, ok := c.admittedVMIDToHost[e.vmID]; ok {
 				pod := c.admittedVMIDToPod[e.vmID]
