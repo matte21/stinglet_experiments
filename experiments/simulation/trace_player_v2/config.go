@@ -16,8 +16,9 @@ type clusterSpec struct {
 }
 
 type clusterCfg struct {
-	Specs     []clusterSpec `yaml:"specs"`
-	MachineID int           `yaml:"machineId"`
+	Specs         []*clusterSpec `yaml:"specs"`
+	MachineID     int            `yaml:"machineId"`
+	CXLMemPercent float64        `yaml:"cxlMemoryPercent"`
 }
 
 // Note: currently we assume that the interconnect between the Sockets is a full mesh.
@@ -48,7 +49,7 @@ type agentCfg struct {
 
 type Cfg struct {
 	// At least one is required.
-	Clusters []clusterCfg `yaml:"clusters"`
+	Clusters []*clusterCfg `yaml:"clusters"`
 
 	// At least one is required.
 	HostResources []hostResourcesCfg `yaml:"hostResources"`
@@ -92,6 +93,11 @@ func validateCfg(c *Cfg) error {
 	}
 
 	for _, cl := range c.Clusters {
+		if (cl.CXLMemPercent) < 0 {
+			return fmt.Errorf("each cluster's cxlMemoryPercent must be >= 0; cluster machineId=%d has cxlMemoryPercent=%f",
+				cl.MachineID, cl.CXLMemPercent)
+		}
+		cl.CXLMemPercent = cl.CXLMemPercent / 100
 		if len(cl.Specs) == 0 {
 			return fmt.Errorf("each cluster must have at least one spec (scheduling algorithm + number of hosts), cluster machineId=%d has none", cl.MachineID)
 		}

@@ -42,9 +42,10 @@ const (
 	reservedCPUs     = threadsPerCore
 	reservedMemBytes = 1 << 12
 	// The following values are taken from S4.
-	intraNUMADistance   = 10
-	intraSocketDistance = 12
-	outOfSocketDistance = 21
+	intraNUMADistance    = 10
+	intraSocketDistance  = 12
+	outOfSocketDistance  = 21
+	zNUMADistancePenalty = 4
 
 	miniDefaultK8sScheduler = "mini-default-k8s-sched"
 )
@@ -266,7 +267,7 @@ func prepareWorkOrDie(ctx context.Context, db *sql.DB, cfg *Cfg, numWorkers int)
 				for specI, spec := range c.Specs {
 					for hostResI, hostResources := range cfg.HostResources {
 						clusterIdx := agentI*len(c.Specs)*len(cfg.HostResources) + specI*len(cfg.HostResources) + hostResI
-						w.clusters[clusterIdx] = newClusterOrDie(ctx, spec.SchedulingAlgo, agent.Name, hostResources.Name, agent, spec.NumHosts, hostResources)
+						w.clusters[clusterIdx] = newClusterOrDie(ctx, spec.SchedulingAlgo, agent.Name, hostResources.Name, agent, spec.NumHosts, hostResources, c.CXLMemPercent)
 					}
 				}
 			}
@@ -320,7 +321,7 @@ func prepareWorkOrDie(ctx context.Context, db *sql.DB, cfg *Cfg, numWorkers int)
 					if clusterIdx >= endClusterIdx {
 						break outer
 					}
-					thisProcClusters[clusterIdx-startClusterIdx] = newClusterOrDie(ctx, spec.SchedulingAlgo, agent.Name, hostResources.Name, agent, spec.NumHosts, hostResources)
+					thisProcClusters[clusterIdx-startClusterIdx] = newClusterOrDie(ctx, spec.SchedulingAlgo, agent.Name, hostResources.Name, agent, spec.NumHosts, hostResources, clus.CXLMemPercent)
 				}
 			}
 		}
@@ -345,14 +346,14 @@ func prepareWorkOrDie(ctx context.Context, db *sql.DB, cfg *Cfg, numWorkers int)
 	return workItems, workLeftovers
 }
 
-func newClusterOrDie(ctx context.Context, schedAlgo, agentName, hostType string, agent agentCfg, numHosts int, hostResources hostResourcesCfg) *cluster {
+func newClusterOrDie(ctx context.Context, schedAlgo, agentName, hostType string, agent agentCfg, numHosts int, hostResources hostResourcesCfg, cxlMemPercent float64) *cluster {
 	agents := make([]hostAgent, numHosts)
 	hosts := make([]runtime.Object, numHosts)
 
 	hostCPUs := int64(hostResources.NumSockets) * int64(hostResources.SncWays) * int64(hostResources.CpusPerNNUMA)
 	hostBytes := int64(hostResources.NumSockets) * int64(hostResources.SncWays) * int64(hostResources.GiBsPerNNUMA) * (1 << 30)
 
-	mi := generateMachineInfo(&hostResources)
+	mi := generateMachineInfo(&hostResources, cxlMemPercent)
 
 	for i := range numHosts {
 		agents[i] = newHostAgentOrDie(mi, agent.TopologyManagerPolicy, agent.TopologyManagerOptions)
@@ -487,12 +488,14 @@ func (n nopEventSink) Update(_ context.Context, e *eventsv1.Event) (*eventsv1.Ev
 
 // NOTE: this code assumes the topology is either the one in VLAB, or the one in S4. It does not
 // generalize to arbitrary topologies.
-func generateMachineInfo(cfg *hostResourcesCfg) *cadvisorapi.MachineInfo {
+func generateMachineInfo(cfg *hostResourcesCfg, cxlMemRatio float64) *cadvisorapi.MachineInfo {
 	// By "Cores" we mean physical cores, while cadvisor means hyperthreads.
 	numCores := cfg.NumSockets * cfg.SncWays * cfg.CpusPerNNUMA / threadsPerCore
-	nodes := make([]cadvisorapi.Node, cfg.NumSockets*cfg.SncWays)
+	// +1 for the zNUMA.
+	nodes := make([]cadvisorapi.Node, cfg.NumSockets*cfg.SncWays+1)
 
-	perNNUMABytes := uint64(cfg.GiBsPerNNUMA) * (1 << 30)
+	// round up to prevent the scheduler from sending us more requests than the host has.
+	perNNUMABytes := uint64(float64(cfg.GiBsPerNNUMA)*(1<<30)*(1-cxlMemRatio)) + 1
 
 	// sockID and nodeID are global, while coreID and thdID are per-node and per-core, respectively.
 	for sockID := range cfg.NumSockets {
@@ -515,12 +518,35 @@ func generateMachineInfo(cfg *hostResourcesCfg) *cadvisorapi.MachineInfo {
 		}
 	}
 
+	// Add the one and only zNUMA.
+	nodes[len(nodes)-1] = cadvisorapi.Node{
+		Id: len(nodes) - 1,
+		// round up to prevent the scheduler from sending us more requests than the host has.
+		Memory: uint64(float64(cfg.GiBsPerNNUMA)*(1<<30)*float64(len(nodes)-1)*cxlMemRatio) + 1,
+	}
+
 	// Set NUMA distances.
+	// We assume there are only either 2 or 4 nNUMAs.
+	// We also assume the zNUMA is directly connected only to socket 1 and not to the other.
 	for i := range nodes {
 		d := make([]uint64, len(nodes))
 		for j := range nodes {
 			if j == i {
 				d[j] = intraNUMADistance
+			} else if len(nodes[i].Cores) == 0 {
+				// If we're here i the zNUMA.
+				if j >= len(nodes)/2 {
+					d[j] = intraSocketDistance + zNUMADistancePenalty
+				} else {
+					d[j] = outOfSocketDistance + zNUMADistancePenalty
+				}
+			} else if len(nodes[j].Cores) == 0 {
+				// If we're here j the zNUMA.
+				if i >= len(nodes)/2 {
+					d[j] = intraSocketDistance + zNUMADistancePenalty
+				} else {
+					d[j] = outOfSocketDistance + zNUMADistancePenalty
+				}
 			} else if nodes[i].Cores[0].SocketID == nodes[j].Cores[0].SocketID {
 				d[j] = intraSocketDistance
 			} else {
@@ -536,6 +562,6 @@ func generateMachineInfo(cfg *hostResourcesCfg) *cadvisorapi.MachineInfo {
 		NumPhysicalCores: numCores,
 		// cadvisor confusingly uses "cores" to mean "threads" here.
 		NumCores:       numCores * threadsPerCore,
-		MemoryCapacity: uint64(len(nodes)) * perNNUMABytes,
+		MemoryCapacity: (uint64(len(nodes)-1) * perNNUMABytes) + nodes[len(nodes)-1].Memory,
 	}
 }
