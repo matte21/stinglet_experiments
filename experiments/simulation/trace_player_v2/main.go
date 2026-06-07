@@ -115,10 +115,25 @@ func printResultsOrDie(workItems []work) {
 				log.Fatalf("failed to open results file %s: %v\n", fileName, err)
 			}
 
+			var invariantsFileName string
+			var invF *os.File
+			if c.agentName == "stinglet" {
+				invariantsFileName = fmt.Sprintf("%s/%s-%d-%s-%s-invariants.txt", *outputDir, *outputFilePrefix, w.machineID, c.schedAlgo, c.hostType)
+				invF, err = os.OpenFile(invariantsFileName, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
+				if err != nil {
+					log.Fatalf("failed to open invariants file %s: %v\n", invariantsFileName, err)
+				}
+			}
+
 			func() {
 				defer func() {
 					if err := f.Close(); err != nil {
 						log.Printf("failed to close results file %s: %v\n", fileName, err)
+					}
+					if c.agentName == "stinglet" {
+						if err := invF.Close(); err != nil {
+							log.Printf("failed to close invariants file %s: %v\n", invariantsFileName, err)
+						}
 					}
 				}()
 
@@ -166,6 +181,12 @@ func printResultsOrDie(workItems []work) {
 				wtr.Flush()
 				if err := wtr.Error(); err != nil {
 					log.Fatalf("failed to flush summary csv writer for %s: %v\n", fileName, err)
+				}
+
+				// invariants file.
+				if c.agentName == "stinglet" {
+					fmt.Fprintf(invF, "cxl_trunc: %d\nnormal_trunc: %d\njoint_trunc: %d\n",
+						c.cxlMemTruncCount, c.normalMemTruncCount, c.jointTruncCount)
 				}
 			}()
 		}
