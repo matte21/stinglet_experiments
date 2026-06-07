@@ -1,0 +1,26 @@
+clusters:
+  - machineId: 10
+    cxlMemoryPercent: 11
+    specs:
+      - numberOfHosts: 210
+        schedulingAlgorithm: MostAllocated
+      - numberOfHosts: 210
+        schedulingAlgorithm: LeastAllocated
+
+hostResources:
+  - name: s4
+    numberOfSockets: 2
+    sncWays: 2
+    cpusPerNNUMA: 32
+    gibsPerNNUMA: 128
+  - name: vlab
+    numberOfSockets: 2
+    sncWays: 1
+    cpusPerNNUMA: 64
+    gibsPerNNUMA: 256
+
+agents:
+  - topologyManagerPolicy: none
+    name: "cpu+mem"
+  - topologyManagerPolicy: best-effort
+    name: "beff"
