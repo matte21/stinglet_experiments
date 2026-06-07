@@ -2,9 +2,9 @@ clusters:
   - machineId: 16
     cxlMemoryPercent: 12.1
     specs:
-      - numberOfHosts: 7549
+      - numberOfHosts: 7548
         schedulingAlgorithm: MostAllocated
-      - numberOfHosts: 7549
+      - numberOfHosts: 7548
         schedulingAlgorithm: LeastAllocated
 
 hostResources:
