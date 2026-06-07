@@ -9,7 +9,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/../../shared/env.sh"
 readonly trace_db_path="$(dirname "${BASH_SOURCE[0]}")/../$trace_db_file"
 
 # Download and unzip the trace: it's 173 MiB.
-readonly trace_url="https://azurepublicdatasettraces.blob.core.windows.net/azurepublicdatasetv2/azurevmallocation_dataset2020/AzurePackingTraceV1.zip"
+readonly trace_url="https://github.com/Azure/AzurePublicDataset/releases/download/dataset-packing-2020/azurevmallocation_dataset2020_AzurePackingTraceV1.zip"
 readonly trace_zip="trace.zip"
 if [[ -f "$trace_db_path" || -f "$trace_zip" ]]; then
     echo "Not downloading trace since it already exists."
