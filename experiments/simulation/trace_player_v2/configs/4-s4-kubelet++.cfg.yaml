@@ -1,0 +1,29 @@
+clusters:
+  - machineId: 4
+    cxlMemoryPercent: 8.6
+    specs:
+      - numberOfHosts: 301
+        schedulingAlgorithm: MostAllocated
+      - numberOfHosts: 301
+        schedulingAlgorithm: LeastAllocated
+
+hostResources:
+  - name: s4
+    numberOfSockets: 2
+    sncWays: 2
+    cpusPerNNUMA: 32
+    gibsPerNNUMA: 128
+  - name: vlab
+    numberOfSockets: 2
+    sncWays: 1
+    cpusPerNNUMA: 64
+    gibsPerNNUMA: 256
+
+
+agents:
+  - topologyManagerPolicy: best-effort
+    name: "beff++"
+  - topologyManagerPolicy: best-effort
+    name: "beff++close"
+    topologyManagerOptions:
+      prefer-closest-numa-nodes: "true"
