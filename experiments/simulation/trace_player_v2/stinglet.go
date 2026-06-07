@@ -77,8 +77,22 @@ func newHostAgentOrDie(mi *cadvisorapi.MachineInfo, _ string, _ map[string]strin
 	// reconciliation here.
 	defaultReconcilePeriod := 10 * time.Second
 
-	m, err := farmemtopologymanager.New(mi, reservedCPUs, perNUMANodeResMem, reservations,
-		defaultReconcilePeriod)
+	var nNUMAToNeighborZNUMA map[int]int
+	if len(mi.Topology) == 3 {
+		// vlab case
+		nNUMAToNeighborZNUMA = map[int]int{
+			1: 2,
+		}
+	} else {
+		// s4 case
+		nNUMAToNeighborZNUMA = map[int]int{
+			2: 4,
+			3: 4,
+		}
+	}
+
+	m, err := farmemtopologymanager.SimNew(mi, reservedCPUs, perNUMANodeResMem, reservations,
+		defaultReconcilePeriod, nNUMAToNeighborZNUMA)
 	if err != nil {
 		log.Fatalf("Failed to create stinglet-based manager: %v\n", err)
 	}
