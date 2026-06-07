@@ -22,7 +22,7 @@ fi
 
 cd stinglet_experiments/experiments/simulation
 if [[ ! -f packing_trace_zone_a_v1.sqlite ]]; then
-    ./prepare_azure_trace.sh
+    helpers/prepare_azure_trace.sh
 fi
 
 cd trace_player_v2
