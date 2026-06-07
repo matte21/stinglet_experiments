@@ -250,7 +250,7 @@ func readAndSendOrProcessEvents(ctx context.Context, w work) {
 func process(ctx context.Context, mid int, e traceEvent, clusters []*cluster) error {
 	for _, c := range clusters {
 		if e.dumpAvgs {
-			log.Printf("SIM: Worker %d-%s-%s-%s, schedulerRejectsCount=%d, agentRejectsCount=%d, avgHostsWorthOfCPUUtil=%f, avgHostsWorthOfMemUtil=%f\n",
+			log.Printf("SIM: Worker %d-%s-%s-%s, schedulerRejectsCount=%d, agentRejectsCount=%d, avgHostsWorthOfCPUUtil=%f, avgHostsWorthOfMemUtil=%f, curHostsWorthOfMemUtil=%f\n",
 				mid,
 				c.schedAlgo,
 				c.hostType,
@@ -258,7 +258,8 @@ func process(ctx context.Context, mid int, e traceEvent, clusters []*cluster) er
 				c.schedulerRejectsCount,
 				c.agentRejectsCount,
 				c.avgHostsWorthOfCPUUtil,
-				c.avgHostsWorthOfMemUtil)
+				c.avgHostsWorthOfMemUtil,
+				c.curHostsWorthOfMemUtil)
 		}
 
 		if e.isArrival {
