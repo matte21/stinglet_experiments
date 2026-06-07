@@ -1,0 +1,24 @@
+clusters:
+  - machineId: 1
+    cxlMemoryPercent: 11.6
+    specs:
+      - numberOfHosts: 8069
+        schedulingAlgorithm: MostAllocated
+      - numberOfHosts: 8069
+        schedulingAlgorithm: LeastAllocated
+
+hostResources:
+  - name: s4
+    numberOfSockets: 2
+    sncWays: 2
+    cpusPerNNUMA: 32
+    gibsPerNNUMA: 128
+  - name: vlab
+    numberOfSockets: 2
+    sncWays: 1
+    cpusPerNNUMA: 64
+    gibsPerNNUMA: 256
+
+agents:
+  - topologyManagerPolicy: none
+    name: "stinglet"
