@@ -3,6 +3,7 @@ module github.com/matte21/stinglet_experiment/experiments/simulation/trace_playe
 go 1.25.0
 
 require (
+	github.com/go-logr/logr v1.4.2
 	github.com/google/cadvisor v0.52.1
 	gopkg.in/yaml.v3 v3.0.1
 	k8s.io/api v0.0.0
@@ -32,7 +33,6 @@ require (
 	github.com/felixge/httpsnoop v1.0.4 // indirect
 	github.com/fsnotify/fsnotify v1.7.0 // indirect
 	github.com/fxamacker/cbor/v2 v2.7.0 // indirect
-	github.com/go-logr/logr v1.4.2 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-openapi/jsonpointer v0.21.0 // indirect
 	github.com/go-openapi/jsonreference v0.20.2 // indirect
