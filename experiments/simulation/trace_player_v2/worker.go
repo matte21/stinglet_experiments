@@ -412,7 +412,7 @@ func newPod(name string, bytes, cxlBytes, cpus int64, guaranteed bool) *v1.Pod {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        name,
 			UID:         types.UID(name),
-			Annotations: make(map[string]string, 0),
+			Annotations: make(map[string]string),
 		},
 		Spec: v1.PodSpec{
 			SchedulerName: miniDefaultK8sScheduler,
@@ -430,20 +430,38 @@ func newPod(name string, bytes, cxlBytes, cpus int64, guaranteed bool) *v1.Pod {
 		},
 	}
 
-	if guaranteed {
-		p.Spec.Containers[0].Resources.Limits = p.Spec.Containers[0].Resources.Requests.DeepCopy()
+	if cxlBytes > 0 {
+		// Scheduler uses the extended resource for filtering and scoring.
+		p.Spec.Containers[0].Resources.Requests[farMemK8sSchedResource] = *resource.NewQuantity(cxlBytes, resource.BinarySI)
+		// Stinglet agent reads the annotation to determine far memory placement.
+		p.ObjectMeta.Annotations[name+"-cont/far-mem"] = strconv.FormatInt(cxlBytes, 10)
 	}
 
-	if cxlBytes > 0 {
-		p.ObjectMeta.Annotations[name+"-cont/far-mem"] = strconv.FormatInt(cxlBytes, 10)
+	if guaranteed {
+		p.Spec.Containers[0].Resources.Limits = p.Spec.Containers[0].Resources.Requests.DeepCopy()
 	}
 
 	return p
 }
 
-func newHost(name string, bytes, cpus int64) *v1.Node {
+func newHost(name string, normalMemBytes, farMemBytes, cpus int64) *v1.Node {
 	allocCPUs := cpus - reservedCPUs
-	allocBytes := bytes - reservedMemBytes
+	allocBytes := normalMemBytes - reservedMemBytes
+
+	capacity := v1.ResourceList{
+		v1.ResourceCPU:    *resource.NewMilliQuantity(cpus*1000, resource.DecimalSI),
+		v1.ResourceMemory: *resource.NewQuantity(normalMemBytes, resource.BinarySI),
+	}
+	allocatable := v1.ResourceList{
+		v1.ResourceCPU:    *resource.NewMilliQuantity(allocCPUs*1000, resource.DecimalSI),
+		v1.ResourceMemory: *resource.NewQuantity(allocBytes, resource.BinarySI),
+		v1.ResourcePods:   *resource.NewQuantity(110, resource.DecimalSI),
+	}
+
+	if farMemBytes > 0 {
+		capacity[farMemK8sSchedResource] = *resource.NewQuantity(farMemBytes, resource.BinarySI)
+		allocatable[farMemK8sSchedResource] = *resource.NewQuantity(farMemBytes, resource.BinarySI)
+	}
 
 	return &v1.Node{
 		ObjectMeta: metav1.ObjectMeta{
@@ -451,15 +469,8 @@ func newHost(name string, bytes, cpus int64) *v1.Node {
 			UID:  types.UID(name),
 		},
 		Status: v1.NodeStatus{
-			Capacity: v1.ResourceList{
-				v1.ResourceCPU:    *resource.NewMilliQuantity(cpus*1000, resource.DecimalSI),
-				v1.ResourceMemory: *resource.NewQuantity(bytes, resource.BinarySI),
-			},
-			Allocatable: v1.ResourceList{
-				v1.ResourceCPU:    *resource.NewMilliQuantity(allocCPUs*1000, resource.DecimalSI),
-				v1.ResourceMemory: *resource.NewQuantity(allocBytes, resource.BinarySI),
-				v1.ResourcePods:   *resource.NewQuantity(110, resource.DecimalSI),
-			},
+			Capacity:    capacity,
+			Allocatable: allocatable,
 		},
 	}
 }

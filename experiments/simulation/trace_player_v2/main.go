@@ -48,6 +48,8 @@ const (
 	zNUMADistancePenalty = 4
 
 	miniDefaultK8sScheduler = "mini-default-k8s-sched"
+
+	farMemK8sSchedResource = "mol.gatech/far-mem"
 )
 
 func main() {
@@ -353,11 +355,9 @@ func newClusterOrDie(ctx context.Context, schedAlgo, agentName, hostType string,
 	mi := generateMachineInfo(&hostResources, cxlMemPercent)
 
 	hostCPUs := int64(hostResources.NumSockets) * int64(hostResources.SncWays) * int64(hostResources.CpusPerNNUMA)
-	hostBytes := int64(0)
 	hostNormalBytes := int64(0)
 	hostCXLBytes := int64(0)
 	for _, node := range mi.Topology {
-		hostBytes += int64(node.Memory)
 		if len(node.Cores) > 0 {
 			hostNormalBytes += int64(node.Memory)
 		} else {
@@ -367,7 +367,11 @@ func newClusterOrDie(ctx context.Context, schedAlgo, agentName, hostType string,
 
 	for i := range numHosts {
 		agents[i] = newHostAgentOrDie(mi, agent.TopologyManagerPolicy, agent.TopologyManagerOptions)
-		hosts[i] = newHost(fmt.Sprintf("host-%d", i), hostBytes, hostCPUs)
+		if agentName == "stinglet" {
+			hosts[i] = newHost(fmt.Sprintf("host-%d", i), hostNormalBytes, hostCXLBytes, hostCPUs)
+		} else {
+			hosts[i] = newHost(fmt.Sprintf("host-%d", i), hostNormalBytes+hostCXLBytes, 0, hostCPUs)
+		}
 	}
 
 	return &cluster{
@@ -375,18 +379,18 @@ func newClusterOrDie(ctx context.Context, schedAlgo, agentName, hostType string,
 		agentName:                agentName,
 		hostType:                 hostType,
 		agents:                   agents,
-		totHostMemBytes:          hostBytes,
+		totHostMemBytes:          hostNormalBytes + hostCXLBytes,
 		hostNormalMemBytes:       hostNormalBytes,
 		hostCXLMemBytes:          hostCXLBytes,
 		totHostCPUs:              hostCPUs,
 		agentRejectReasonToCount: make(map[string]uint64),
-		scheduler:                newSchedulerOrDie(ctx, schedAlgo, hosts),
+		scheduler:                newSchedulerOrDie(ctx, schedAlgo, hosts, agentName == "stinglet"),
 		admittedVMIDToHost:       make(map[int64]int),
 		admittedVMIDToPod:        make(map[int64]*v1.Pod),
 	}
 }
 
-func newSchedulerOrDie(ctx context.Context, fitStrategy string, hosts []runtime.Object) *scheduler.Scheduler {
+func newSchedulerOrDie(ctx context.Context, fitStrategy string, hosts []runtime.Object, wantFarMem bool) *scheduler.Scheduler {
 	var fitStrategyType schedcfg.ScoringStrategyType
 	scoringPlugins := []schedcfg.Plugin{{Name: "NodeResourcesFit", Weight: 1}}
 	scoringPluginsCfgs := []schedcfg.PluginConfig{}
@@ -399,7 +403,7 @@ func newSchedulerOrDie(ctx context.Context, fitStrategy string, hosts []runtime.
 		// By default in K8s Least allocated goes together with the NodeResourcesBalancedAllocation
 		// plugin and we stick to the defaults as much as possible.
 		scoringPlugins = append(scoringPlugins, schedcfg.Plugin{Name: "NodeResourcesBalancedAllocation", Weight: 1})
-		scoringPluginsCfgs = append(scoringPluginsCfgs, balanceAllocSchedulingPluginCfg())
+		scoringPluginsCfgs = append(scoringPluginsCfgs, balanceAllocSchedulingPluginCfg(wantFarMem))
 	default:
 		log.Fatalf("SIM: Received request to create scheduler with fit strategy %s, only supported "+
 			"strategies are LeastAllocated and MostAllocated", fitStrategy)
@@ -452,14 +456,18 @@ func newSchedulerOrDie(ctx context.Context, fitStrategy string, hosts []runtime.
 	return s
 }
 
-func balanceAllocSchedulingPluginCfg() schedcfg.PluginConfig {
+func balanceAllocSchedulingPluginCfg(wantFarMem bool) schedcfg.PluginConfig {
+	rs := []schedcfg.ResourceSpec{
+		{Name: "cpu", Weight: 1},
+		{Name: "memory", Weight: 1},
+	}
+	if wantFarMem {
+		rs = append(rs, schedcfg.ResourceSpec{Name: farMemK8sSchedResource, Weight: 1})
+	}
 	return schedcfg.PluginConfig{
 		Name: "NodeResourcesBalancedAllocation",
 		Args: &schedcfg.NodeResourcesBalancedAllocationArgs{
-			Resources: []schedcfg.ResourceSpec{
-				{Name: "cpu", Weight: 1},
-				{Name: "memory", Weight: 1},
-			},
+			Resources: rs,
 		},
 	}
 }
