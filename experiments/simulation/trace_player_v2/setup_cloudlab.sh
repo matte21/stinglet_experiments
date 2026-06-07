@@ -26,4 +26,5 @@ if [[ ! -f packing_trace_zone_a_v1.sqlite ]]; then
 fi
 
 cd trace_player_v2
+sed -i 's/\/home\/molivi\/k8s/\/users\/molivi3\/k8s/' go.mod
 make K8S_DIR="/users/molivi3/k8s"
