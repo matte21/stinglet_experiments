@@ -15,21 +15,21 @@ mkdir -p "$res_dir"
 
 bin/sim-stinglet --trace-db-file "../packing_trace_zone_a_v1.sqlite" \
     --config-file "configs/$mid-s4-stinglet.cfg.yaml" \
-    --num-workers 3 \
+    --num-workers 5 \
     --output-dir "$res_dir" \
     --output-file-prefix "stinglet" 2>&1 | grep --line-buffered "SIM:" > stinglet.log &
 stinglet_pid=$!
 
 bin/sim-v1.33.0-std --trace-db-file "../packing_trace_zone_a_v1.sqlite" \
     --config-file "configs/$mid-s4-kubelet.cfg.yaml" \
-    --num-workers 5 \
+    --num-workers 9 \
     --output-dir "$res_dir" \
     --output-file-prefix "kubelet" 2>&1 | grep --line-buffered "SIM:" > kubelet.log &
 kubelet_pid=$!
 
 bin/sim-v1.33.0++ --trace-db-file "../packing_trace_zone_a_v1.sqlite" \
     --config-file "configs/$mid-s4-kubelet++.cfg.yaml" \
-    --num-workers 5 \
+    --num-workers 9 \
     --output-dir "$res_dir" \
     --output-file-prefix "kubelet++" 2>&1 | grep --line-buffered "SIM:" > kubelet++.log &
 kubelet_plus_pid=$!
