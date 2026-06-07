@@ -1,0 +1,22 @@
+clusters:
+  - machineId: 34
+    specs:
+      - numberOfHosts: 19392
+        schedulingAlgorithm: MostAllocated
+      - numberOfHosts: 19392
+        schedulingAlgorithm: LeastAllocated
+
+hostResources:
+  - name: s4
+    numberOfSockets: 2
+    sncWays: 2
+    cpusPerNNUMA: 32
+    gibsPerNNUMA: 128
+
+agents:
+  - topologyManagerPolicy: best-effort
+    name: "beff++"
+  - topologyManagerPolicy: best-effort
+    name: "beff++close"
+    topologyManagerOptions:
+      prefer-closest-numa-nodes: "true"
