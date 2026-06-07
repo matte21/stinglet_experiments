@@ -47,9 +47,11 @@ type cluster struct {
 	scheduler *k8sched.Scheduler
 
 	// agent at index i runs on host at index i.
-	agents          []hostAgent
-	totHostMemBytes int64
-	totHostCPUs     int64
+	agents             []hostAgent
+	totHostMemBytes    int64
+	hostNormalMemBytes int64
+	hostCXLMemBytes    int64
+	totHostCPUs        int64
 
 	agentRejectReasonToCount map[string]uint64
 
@@ -77,9 +79,11 @@ type cluster struct {
 	admitTimeAvgCount           uint64
 	schedTimeAvgUsec            float64
 	schedTimeAvgCount           uint64
-
-	schedRejectAvgMemRatio float64
-	agentRejectAvgMemRatio float64
+	normalMemTruncCount         uint64
+	cxlMemTruncCount            uint64
+	jointTruncCount             uint64
+	schedRejectAvgMemRatio      float64
+	agentRejectAvgMemRatio      float64
 
 	utilSamplingOn bool
 }
@@ -260,7 +264,7 @@ func process(ctx context.Context, mid int, e traceEvent, clusters []*cluster) er
 		if e.isArrival {
 			c.arrivalsCount++
 
-			p := newPodFromEvent(e, c.totHostMemBytes, c.totHostCPUs)
+			p := newPodFromEvent(e, c.totHostMemBytes, c.hostNormalMemBytes, c.hostCXLMemBytes, c.totHostCPUs, c.agentName == "stinglet", c)
 
 			o, err := schedule(ctx, c, p)
 			if err != nil {
@@ -360,8 +364,8 @@ func admit(c *cluster, i int64, p *v1.Pod) (string, error) {
 	return rejectReason, err
 }
 
-func newPodFromEvent(e traceEvent, hostBytes, hostCPUs int64) *v1.Pod {
-	podBytes := int64(float64(hostBytes) * e.vmMem)
+func newPodFromEvent(e traceEvent, hostBytes, hostNormalBytes, hostCXLBytes, hostCPUs int64, checkFarMem bool, c *cluster) *v1.Pod {
+	podNormalBytes := int64(float64(hostBytes) * e.vmMem)
 	podCPUsFlt := float64(hostCPUs) * e.vmCPUs
 
 	// Guaranteed Pods must request an integer number of cores to get exclusive CPUs by the CPU
@@ -374,20 +378,47 @@ func newPodFromEvent(e traceEvent, hostBytes, hostCPUs int64) *v1.Pod {
 		podCPUs = int64(podCPUsFlt)
 	}
 
-	return newPod(fmt.Sprintf("pod-%d", e.vmID), podBytes, podCPUs, e.vmPriority == 0)
+	podCXLBytes := int64(0)
+	if checkFarMem {
+		if e.vmCXLMemPercentPond.Valid {
+			podCXLBytes = int64(float64(podNormalBytes) * (float64(e.vmCXLMemPercentPond.Int32) / 100))
+			podNormalBytes -= podCXLBytes
+		}
+
+		normalMemTrunc := false
+		if podNormalBytes > hostNormalBytes {
+			podCXLBytes += podNormalBytes - hostNormalBytes
+			podNormalBytes = hostNormalBytes
+			c.normalMemTruncCount++
+			normalMemTrunc = true
+		}
+
+		if podCXLBytes > hostCXLBytes {
+			podNormalBytes += podCXLBytes - hostCXLBytes
+			podCXLBytes = hostCXLBytes
+			c.cxlMemTruncCount++
+			if normalMemTrunc {
+				c.jointTruncCount++
+			}
+		}
+	}
+
+	return newPod(fmt.Sprintf("pod-%d", e.vmID), podNormalBytes, podCXLBytes, podCPUs, e.vmPriority == 0)
 }
 
 // Note: CPUs unit is whole cores, not millicores.
-func newPod(name string, bytes, cpus int64, guaranteed bool) *v1.Pod {
+func newPod(name string, bytes, cxlBytes, cpus int64, guaranteed bool) *v1.Pod {
 	p := &v1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: name,
-			UID:  types.UID(name),
+			Name:        name,
+			UID:         types.UID(name),
+			Annotations: make(map[string]string, 0),
 		},
 		Spec: v1.PodSpec{
 			SchedulerName: miniDefaultK8sScheduler,
 			Containers: []v1.Container{
 				{
+					Name: name + "-cont",
 					Resources: v1.ResourceRequirements{
 						Requests: v1.ResourceList{
 							v1.ResourceCPU:    *resource.NewMilliQuantity(cpus*1000, resource.DecimalSI),
@@ -401,6 +432,10 @@ func newPod(name string, bytes, cpus int64, guaranteed bool) *v1.Pod {
 
 	if guaranteed {
 		p.Spec.Containers[0].Resources.Limits = p.Spec.Containers[0].Resources.Requests.DeepCopy()
+	}
+
+	if cxlBytes > 0 {
+		p.ObjectMeta.Annotations[name+"-cont/far-mem"] = strconv.FormatInt(cxlBytes, 10)
 	}
 
 	return p

@@ -350,10 +350,20 @@ func newClusterOrDie(ctx context.Context, schedAlgo, agentName, hostType string,
 	agents := make([]hostAgent, numHosts)
 	hosts := make([]runtime.Object, numHosts)
 
-	hostCPUs := int64(hostResources.NumSockets) * int64(hostResources.SncWays) * int64(hostResources.CpusPerNNUMA)
-	hostBytes := int64(hostResources.NumSockets) * int64(hostResources.SncWays) * int64(hostResources.GiBsPerNNUMA) * (1 << 30)
-
 	mi := generateMachineInfo(&hostResources, cxlMemPercent)
+
+	hostCPUs := int64(hostResources.NumSockets) * int64(hostResources.SncWays) * int64(hostResources.CpusPerNNUMA)
+	hostBytes := int64(0)
+	hostNormalBytes := int64(0)
+	hostCXLBytes := int64(0)
+	for _, node := range mi.Topology {
+		hostBytes += int64(node.Memory)
+		if len(node.Cores) > 0 {
+			hostNormalBytes += int64(node.Memory)
+		} else {
+			hostCXLBytes += int64(node.Memory)
+		}
+	}
 
 	for i := range numHosts {
 		agents[i] = newHostAgentOrDie(mi, agent.TopologyManagerPolicy, agent.TopologyManagerOptions)
@@ -366,6 +376,8 @@ func newClusterOrDie(ctx context.Context, schedAlgo, agentName, hostType string,
 		hostType:                 hostType,
 		agents:                   agents,
 		totHostMemBytes:          hostBytes,
+		hostNormalMemBytes:       hostNormalBytes,
+		hostCXLMemBytes:          hostCXLBytes,
 		totHostCPUs:              hostCPUs,
 		agentRejectReasonToCount: make(map[string]uint64),
 		scheduler:                newSchedulerOrDie(ctx, schedAlgo, hosts),

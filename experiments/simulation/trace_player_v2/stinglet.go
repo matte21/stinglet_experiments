@@ -5,6 +5,7 @@ package main
 import (
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	cadvisorapi "github.com/google/cadvisor/info/v1"
@@ -88,7 +89,16 @@ func newHostAgentOrDie(mi *cadvisorapi.MachineInfo, _ string, _ map[string]strin
 	}
 }
 
-func validateAgentCfgs([]agentCfg) error {
-	// Stinglet has its own built-in policy; agent configs are ignored.
+func validateAgentCfgs(aCfg []agentCfg) error {
+	if len(aCfg) == 0 {
+		return fmt.Errorf("stinglet requires at least one agent config")
+	}
+
+	for _, ac := range aCfg {
+		if strings.ToLower(strings.TrimSpace(ac.Name)) != "stinglet" {
+			return fmt.Errorf("stinglet requires agent config Name field to be \"stinglet\"")
+		}
+	}
+
 	return nil
 }
