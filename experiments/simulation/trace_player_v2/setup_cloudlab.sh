@@ -7,15 +7,17 @@ set -o nounset
 apt-get update -y && apt-get install -y numactl
 
 cd ~
-wget https://go.dev/dl/go1.25.0.linux-amd64.tar.gz
-sudo tar -C /usr/local -xzf go1.25.0.linux-amd64.tar.gz
-rm go1.25.0.linux-amd64.tar.gz
-echo "export PATH=\$PATH:/usr/local/go/bin" >>  ~/.bashrc
-export PATH=$PATH:/usr/local/go/bin
-go version
+if ! command -v go &>/dev/null; then
+    wget https://go.dev/dl/go1.25.0.linux-amd64.tar.gz
+    sudo tar -C /usr/local -xzf go1.25.0.linux-amd64.tar.gz
+    rm go1.25.0.linux-amd64.tar.gz
+    echo "export PATH=\$PATH:/usr/local/go/bin" >>  ~/.bashrc
+    export PATH=$PATH:/usr/local/go/bin
+    go version
+fi
 
 if [[ ! -d k8s ]]; then
-    git clone https://github.com/matte21/private-k8 k8s
+    git clone https://github.com/matte21/private-k8s k8s
 fi
 
 cd stinglet_experiments/experiments/simulation
