@@ -52,6 +52,19 @@ const (
 	farMemK8sSchedResource = "mol.gatech/far-mem"
 )
 
+var midToLoggingPeriod = map[int]int64{
+	1:  50000,
+	4:  1100,
+	6:  50000,
+	10: 320,
+	11: 50000,
+	16: 50000,
+	19: 4460,
+	21: 50000,
+	27: 50000,
+	34: 50000,
+}
+
 func main() {
 	klog.SetOutput(io.Discard)
 	klog.SetLogger(logr.Discard())
@@ -277,8 +290,9 @@ func prepareWorkOrDie(ctx context.Context, db *sql.DB, cfg *Cfg, numWorkers int)
 
 	for i, c := range cfg.Clusters {
 		w := work{
-			machineID: c.MachineID,
-			db:        db,
+			machineID:          c.MachineID,
+			logginPeriodEvents: midToLoggingPeriod[c.MachineID],
+			db:                 db,
 		}
 
 		if i >= numWorkers-len(cfg.Clusters) {
@@ -351,9 +365,10 @@ func prepareWorkOrDie(ctx context.Context, db *sql.DB, cfg *Cfg, numWorkers int)
 
 		ch := make(chan traceEvent, 5)
 		w := work{
-			machineID: cfg.Clusters[clusterID].MachineID,
-			inChan:    ch,
-			clusters:  thisProcClusters,
+			machineID:          cfg.Clusters[clusterID].MachineID,
+			logginPeriodEvents: midToLoggingPeriod[cfg.Clusters[clusterID].MachineID],
+			inChan:             ch,
+			clusters:           thisProcClusters,
 		}
 		// wire the out channel for the corresponding reader.
 		workItems[clusterID].outChans = append(workItems[clusterID].outChans, ch)
@@ -396,18 +411,19 @@ func newClusterOrDie(ctx context.Context, schedAlgo, agentName, hostType string,
 	}
 
 	return &cluster{
-		schedAlgo:                schedAlgo,
-		agentName:                agentName,
-		hostType:                 hostType,
-		agents:                   agents,
-		totHostMemBytes:          hostNormalBytes + hostCXLBytes,
-		hostNormalMemBytes:       hostNormalBytes,
-		hostCXLMemBytes:          hostCXLBytes,
-		totHostCPUs:              hostCPUs,
-		agentRejectReasonToCount: make(map[string]uint64),
-		scheduler:                newSchedulerOrDie(ctx, schedAlgo, hosts, agentName == "stinglet"),
-		admittedVMIDToHost:       make(map[int64]int),
-		admittedVMIDToPod:        make(map[int64]*v1.Pod),
+		schedAlgo:                     schedAlgo,
+		agentName:                     agentName,
+		hostType:                      hostType,
+		agents:                        agents,
+		totHostMemBytes:               hostNormalBytes + hostCXLBytes,
+		hostNormalMemBytes:            hostNormalBytes,
+		hostCXLMemBytes:               hostCXLBytes,
+		totHostCPUs:                   hostCPUs,
+		agentRejectReasonToCount:      make(map[string]uint64),
+		scheduler:                     newSchedulerOrDie(ctx, schedAlgo, hosts, agentName == "stinglet"),
+		admittedVMIDToHost:            make(map[int64]int),
+		admittedVMIDToPod:             make(map[int64]*v1.Pod),
+		curHostsWorthOfMemUtilSamples: make([]float64, 0, 250),
 	}
 }
 

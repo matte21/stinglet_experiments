@@ -29,14 +29,15 @@ const (
 )
 
 type traceEvent struct {
-	dumpAvgs                bool
-	isArrival               bool
-	vmID                    int64
-	vmPriority              int64
-	vmCPUs                  float64
-	vmMem                   float64
-	vmCXLMemPercentPond     sql.NullInt32
-	vmCXLMemPercentGreenSKU sql.NullInt32
+	sampleHostsWorthOfMemUtil bool
+	dumpAvgs                  bool
+	isArrival                 bool
+	vmID                      int64
+	vmPriority                int64
+	vmCPUs                    float64
+	vmMem                     float64
+	vmCXLMemPercentPond       sql.NullInt32
+	vmCXLMemPercentGreenSKU   sql.NullInt32
 }
 
 type cluster struct {
@@ -86,10 +87,13 @@ type cluster struct {
 	agentRejectAvgMemRatio      float64
 
 	utilSamplingOn bool
+
+	curHostsWorthOfMemUtilSamples []float64
 }
 
 type work struct {
-	machineID int
+	machineID          int
+	logginPeriodEvents int64
 
 	// Event reader state.
 	db       *sql.DB
@@ -216,6 +220,9 @@ func readAndSendOrProcessEvents(ctx context.Context, w work) {
 			log.Printf("SIM: mid=%d processed %d events\n", w.machineID, eventsRead-1)
 			e.dumpAvgs = true
 		}
+		if eventsRead%uint64(w.logginPeriodEvents) == 1 && eventsRead > 1 {
+			e.sampleHostsWorthOfMemUtil = true
+		}
 
 		if len(w.outChans) == 0 {
 			// If we're here, this worker is both a reader and a processor of events, so we
@@ -239,6 +246,7 @@ func readAndSendOrProcessEvents(ctx context.Context, w work) {
 		}
 
 		e.dumpAvgs = false
+		e.sampleHostsWorthOfMemUtil = false
 	}
 
 	if err := trace.Err(); err != nil {
@@ -260,6 +268,9 @@ func process(ctx context.Context, mid int, e traceEvent, clusters []*cluster) er
 				c.avgHostsWorthOfCPUUtil,
 				c.avgHostsWorthOfMemUtil,
 				c.curHostsWorthOfMemUtil)
+		}
+		if e.sampleHostsWorthOfMemUtil {
+			c.curHostsWorthOfMemUtilSamples = append(c.curHostsWorthOfMemUtilSamples, c.curHostsWorthOfMemUtil)
 		}
 
 		if e.isArrival {
