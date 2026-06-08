@@ -257,6 +257,43 @@ func printResultsOrDie(workItems []work) {
 			}()
 		}
 	}
+
+	for _, w := range workItems {
+		for _, c := range w.clusters {
+			fileName := fmt.Sprintf("%s/%s-%d-%s-%s-%s-util-samples.csv",
+				*outputDir, *outputFilePrefix, w.machineID, c.schedAlgo, c.hostType, c.agentName)
+
+			f, err := os.OpenFile(fileName, os.O_CREATE|os.O_WRONLY, 0o644)
+			if err != nil {
+				log.Fatalf("failed to open util samples file %s: %v\n", fileName, err)
+			}
+
+			func() {
+				defer func() {
+					if err := f.Close(); err != nil {
+						log.Printf("failed to close util samples file %s: %v\n", fileName, err)
+					}
+				}()
+
+				wtr := csv.NewWriter(f)
+
+				if err := wtr.Write([]string{c.agentName}); err != nil {
+					log.Fatalf("failed to write util samples header to %s: %v\n", fileName, err)
+				}
+
+				for _, s := range c.curHostsWorthOfMemUtilSamples {
+					if err := wtr.Write([]string{strconv.FormatFloat(s, 'f', -1, 64)}); err != nil {
+						log.Fatalf("failed to write util sample to %s: %v\n", fileName, err)
+					}
+				}
+
+				wtr.Flush()
+				if err := wtr.Error(); err != nil {
+					log.Fatalf("failed to flush util samples csv writer for %s: %v\n", fileName, err)
+				}
+			}()
+		}
+	}
 }
 
 func connectToTraceDBOrDie(dbFile string, numConns int) (*sql.DB, func()) {
